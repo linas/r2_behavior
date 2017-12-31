@@ -1,4 +1,4 @@
-behavior:
+gestures:
   type: array
   format: table
   items:
