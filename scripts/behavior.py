@@ -186,6 +186,7 @@ class Behavior:
 
     def SelectNextAudience(self):
         # TODO: switch to next audience (according to audience ROI)
+        ()
 
 
     def HandleTimer(self,data):
@@ -449,11 +450,11 @@ class Behavior:
     def HandleBehaviorConfig(self, config, level):
 
         if config.enable_flag != self.enable_flag:
-            self.enable_flag = new_enable_flag
+            self.enable_flag = config.enable_flag
             # TODO: enable or disable the behaviors
 
         if config.synthesizer_rate != self.synthesizer_rate:
-            self.synthesizer_rate = new_synthesizer_rate
+            self.synthesizer_rate = config.synthesizer_rate
             self.timer.shutdown()
             self.timer = rospy.Timer(rospy.Duration(1.0 / self.synthesizer_rate),self.HandleTimer)
 
