@@ -22,7 +22,7 @@ from hr_msgs.msg import TTS
 
 
 # in interactive settings with people, the EyeContact machine is used to define specific states for eye contact
-# this is purely mechanical, so it follows a very strict control logic; the lookat, awareness and overall state machines control which eyecontact mode is actually used by switching the eyecontact state
+# this is purely mechanical, so it follows a very strict control logic; the overall state machines controls which eyecontact mode is actually used by switching the eyecontact state
 class EyeContact(Enum):
     IDLE      = 0  # don't make eye contact
     LEFT_EYE  = 1  # look at left eye
@@ -32,7 +32,7 @@ class EyeContact(Enum):
 
 
 # the lookat machine is the lowest level and has the robot look at specific things: saliency, hands, faces
-# this is purely mechanical, so it follows a very strict control logic; the awareness and overall state machines control where the robot looks at by switching the lookat state
+# this is purely mechanical, so it follows a very strict control logic; the overall state machines controls where the robot looks at by switching the lookat state
 class LookAt(Enum):
     IDLE      = 0  # look at nothing in particular
     AVOID     = 1  # actively avoid looking at face, hand or saliency
@@ -42,7 +42,21 @@ class LookAt(Enum):
     ALL_FACES = 5  # look at all faces, make eye contact and switch
     AUDIENCE  = 6  # look at the audience and switch
     SPEAKER   = 7  # look at the speaker
-# param: current face
+# params: current face
+
+
+# the mirroring machine is the lowest level and has the robot mirror the face it is currently looking at
+# this is purely mechanical, so it follows a very strict control logic; the overall state machine controls which mirroring more is actually used by switching the mirroring state
+class Mirroring(Enum):
+    IDLE           = 0  # no mirroring
+    EYEBROWS       = 1  # mirror the eyebrows only
+    EYELIDS        = 2  # mirror the blinking only
+    EYES           = 3  # mirror eyebrows and eyelids
+    MOUTH          = 4  # mirror mouth opening
+    MOUTH_EYEBROWS = 5  # mirror mouth and eyebrows
+    MOUTH_EYELIDS  = 6  # mirror mouth and eyelids
+    ALL            = 7  # mirror everything
+# params: eyebrows magnitude, eyelid magnitude, mouth magnitude
 
 
 # awareness: saliency, hands, faces, motion sensors
@@ -66,8 +80,10 @@ class Behavior:
 
     def __init__(self):
 
-        self.robot_name = rospy.get_param("/robot_name")
+        # create lock
         self.lock = threading.Lock()
+
+        self.robot_name = rospy.get_param("/robot_name")
 
         # setup face, hand and saliency structures
         self.faces = {}  # index = cface_id, which should be relatively steady from vision_pipeline
@@ -78,29 +94,7 @@ class Behavior:
         self.current_saliency_ts = 0  # ts of current saliency vector
         self.current_eye = 0  # current eye (0 = left, 1 = right, 2 = mouth)
 
-        # dynamic parameters
-        self.enable_flag = rospy.get_param("enable_flag")
-        self.synthesizer_rate = rospy.get_param("synthesizer_rate")
-
-        self.eyecontact = rospy.get_param("eyecontact_state")
-        self.lookat = rospy.get_param("lookat_state")
-        self.state = rospy.get_param("state")
-
-        self.eyes_counter_min = rospy.get_param("eyes_counter_min")
-        self.eyes_counter_max = rospy.get_param("eyes_counter_max")
-        self.saliency_counter_min = rospy.get_param("saliency_counter_min")
-        self.saliency_counter_max = rospy.get_param("saliency_counter_max")
-        self.faces_counter_min = rospy.get_param("faces_counter_min")
-        self.faces_counter_max = rospy.get_param("faces_counter_max")
-        self.audience_counter_min = rospy.get_param("audience_counter_min")
-        self.audience_counter_max = rospy.get_param("audience_counter_max")
-        self.keep_time = rospy.get_param("keep_time")
-
-        # counters
-        self.eyes_counter = random.randint(self.eyes_counter_min,self.eyes_counter_max)
-        self.saliency_counter = random.randint(self.saliency_counter_min,self.saliency_counter_max)
-        self.faces_counter = random.randint(self.faces_counter_min,self.faces_counter_max)
-        self.audience_counter = random.randint(self.audience_counter_min,self.audience_counter_max)
+        self.tf_listener = tf.TransformListener(False, rospy.Duration(1))
 
         # take candidate streams exactly like RealSense Tracker until fusion is better defined and we can rely on combined camera stuff
         rospy.Subscriber('/{}/perception/realsense/cface'.format(self.robot_name), CandidateFace, self.HandleFace)
@@ -121,13 +115,76 @@ class Behavior:
 
         self.hand_events_pub = rospy.Publisher('/hand_events', String, queue_size=1)
 
-        self.tf_listener = tf.TransformListener(False, rospy.Duration(1))
-
-        # start the timer
-        self.timer = rospy.Timer(rospy.Duration(1.0 / self.synthesizer_rate),self.HandleTimer)
-
         # and start the dynamic reconfigure servers
-        self.behavior_srv = Server(BehaviorConfig, self.HandleBehaviorConfig)
+        self.enable_flag = True
+        self.synthesizer_rate = 10.0
+        self.saliency_counter_min = 1.0
+        self.saliency_counter_max = 30.0
+        self.faces_counter_min = 1.0
+        self.faces_counter_max = 30.0
+        self.eyes_counter_min = 1.0
+        self.eyes_counter_max = 30.0
+        self.audience_counter_min = 1.0
+        self.audience_counter_max = 30.0
+        self.eyes_counter = random.randint(self.eyes_counter_min,self.eyes_counter_max)
+        self.saliency_counter = random.randint(self.saliency_counter_min,self.saliency_counter_max)
+        self.faces_counter = random.randint(self.faces_counter_min,self.faces_counter_max)
+        self.audience_counter = random.randint(self.audience_counter_min,self.audience_counter_max)
+        self.keep_time = 1.0
+        self.eyecontact = EyeContact.IDLE
+        self.lookat = LookAt.IDLE
+        self.mirroring = Mirroring.IDLE
+        self.state = State.IDLE
+        self.timer = rospy.Timer(rospy.Duration(1.0 / self.synthesizer_rate),self.HandleTimer)
+        self.config_server = Server(BehaviorConfig, self.HandleConfig)
+
+
+    def HandleConfig(self, config, level):
+
+        with self.lock:
+
+            if self.enable_flag != config.enable_flag:
+                self.enable_flag = config.enable_flag
+                # TODO: enable or disable the behaviors
+
+            if self.synthesizer_rate != config.synthesizer_rate:
+                self.synthesizer_rate = config.synthesizer_rate
+                self.timer.shutdown()
+                self.timer = rospy.Timer(rospy.Duration(1.0 / self.synthesizer_rate),self.HandleTimer)
+
+            # update the counter ranges (and counters if the ranges changed)
+            if config.saliency_counter_min != self.saliency_counter_min or config.saliency_counter_max != self.saliency_counter_max:
+                self.saliency_counter_min = config.saliency_counter_min
+                self.saliency_counter_max = config.saliency_counter_max
+                self.saliency_counter = random.randint(self.saliency_counter_min,self.saliency_counter_max)
+
+            if config.faces_counter_min != self.faces_counter_min or config.faces_counter_max != self.faces_counter_max:
+                self.faces_counter_min = config.faces_counter_min
+                self.faces_counter_max = config.faces_counter_max
+                self.faces_counter = random.randint(self.faces_counter_min,self.faces_counter_max)
+
+            if config.eyes_counter_min != self.eyes_counter_min or config.eyes_counter_max != self.eyes_counter_max:
+                self.eyes_counter_min = config.eyes_counter_min
+                self.eyes_counter_max = config.eyes_counter_max
+                self.eyes_counter = random.randint(self.eyes_counter_min,self.eyes_counter_max)
+        
+            if config.audience_counter_min != self.audience_counter_min or config.audience_counter_max != self.audience_counter_max:
+                self.audience_counter_min = config.audience_counter_min
+                self.audience_counter_max = config.audience_counter_max
+                self.audience_counter = random.randint(self.audience_counter_min,self.audience_counter_max)
+        
+            # keep time
+            self.keep_time = config.keep_time
+
+            # and set the states for each state machine
+            self.SetEyeContact(config.eyecontact_state)
+            self.SetLookAt(config.lookat_state)
+            self.SetMirroring(config.mirroring_state)
+
+            # and finally the overall state
+            self.SetState(config.state)
+
+        return config
 
 
     def Say(self,text):
@@ -191,157 +248,161 @@ class Behavior:
 
     def HandleTimer(self,data):
 
-        # this is the heart of the synthesizer, here the lookat and eyecontact state machines take care of where the robot is looking, and random expressions and gestures are triggered to look more alive (like RealSense Tracker)
+        with self.lock:
 
-        ts = data.current_expected
+            # this is the heart of the synthesizer, here the lookat and eyecontact state machines take care of where the robot is looking, and random expressions and gestures are triggered to look more alive (like RealSense Tracker)
 
-        # ==== handle lookat
-        if self.lookat == LookAt.IDLE:
-            # no specific target, let Blender do it's soma cycle thing
-            ()
+            ts = data.current_expected
 
-        elif self.lookat == LookAt.AVOID:
-            # TODO: find out where there is no saliency, hand or face
-            # TODO: head_focus_pub
-            ()
+            # ==== handle lookat
+            if self.lookat == LookAt.IDLE:
+                # no specific target, let Blender do it's soma cycle thing
+                ()
 
-        elif self.lookat == LookAt.SALIENCY:
-            self.saliency_counter -= 1
-            if self.saliency_counter == 0:
-                self.saliency_counter = random.randint(self.saliency_counter_min,self.saliency_counter_max)
-                self.SelectNextSaliency()
-            if self.current_saliency_ts != 0:
-                cursaliency = self.saliencies[self.current_saliency_ts]
-                self.SetHeadFocus(self.saliencies[self.current_saliency_ts].direction)
+            elif self.lookat == LookAt.AVOID:
+                # TODO: find out where there is no saliency, hand or face
+                # TODO: head_focus_pub
+                ()
 
-        elif self.lookat == LookAt.HAND:
-            # stare at hand
-            if self.hand != None:
-                self.SetHeadFocus(self.hand.position)
+            elif self.lookat == LookAt.SALIENCY:
+                self.saliency_counter -= 1
+                if self.saliency_counter == 0:
+                    self.saliency_counter = random.randint(self.saliency_counter_min,self.saliency_counter_max)
+                    self.SelectNextSaliency()
+                if self.current_saliency_ts != 0:
+                    cursaliency = self.saliencies[self.current_saliency_ts]
+                    self.SetHeadFocus(self.saliencies[self.current_saliency_ts].direction)
 
-        elif self.lookat == LookAt.AUDIENCE:
-            self.audience_counter -= 1
-            if self.audience_counter == 0:
-                self.audience_counter = random.randint(self.audience_counter_min,self.audience_counter_max)
-                self.SelectNextAudience()
-                # TODO: self.SetHeadFocus()
+            elif self.lookat == LookAt.HAND:
+                # stare at hand
+                if self.hand != None:
+                    self.SetHeadFocus(self.hand.position)
 
-        elif self.lookat == LookAt.SPEAKER:
-            ()
-            # TODO: look at the speaker, according to speaker ROI
+            elif self.lookat == LookAt.AUDIENCE:
+                self.audience_counter -= 1
+                if self.audience_counter == 0:
+                    self.audience_counter = random.randint(self.audience_counter_min,self.audience_counter_max)
+                    self.SelectNextAudience()
+                    # TODO: self.SetHeadFocus()
 
-        else:
-            if self.lookat == LookAt.ALL_FACES:
-                self.faces_counter -= 1
-                if self.faces_counter == 0:
-                    self.faces_counter = random.randint(self.faces_counter_min,self.faces_counter_max)
+            elif self.lookat == LookAt.SPEAKER:
+                ()
+                # TODO: look at the speaker, according to speaker ROI
+
+            else:
+                if self.lookat == LookAt.ALL_FACES:
+                    self.faces_counter -= 1
+                    if self.faces_counter == 0:
+                        self.faces_counter = random.randint(self.faces_counter_min,self.faces_counter_max)
+                        self.SelectNextFace()
+
+                # take the current face
+                if self.current_face_id != 0:
+                    curface = self.faces[self.current_face_id]
+                    face_pos = curface.position
+
+                    # ==== handle eyecontact (only for LookAt.ONE_FACE and LookAt.ALL_FACES)
+
+                    # calculate where left eye, right eye and mouth are on the current face
+                    left_eye_pos = Float32XYZ()
+                    right_eye_pos = Float32XYZ()
+                    mouth_pos = Float32XYZ()
+
+                    # all are 5cm in front of the center of the face
+                    left_eye_pos.x = face_pos.x - 0.05
+                    right_eye_pos.x = face_pos.x - 0.05
+                    mouth_pos.x = face_pos.x - 0.05
+
+                    left_eye_pos.y = face_pos.y + 0.03  # left eye is 3cm to the left of the center
+                    right_eye_pos.y = face_pos.y - 0.03  # right eye is 3cm to the right of the center
+                    mouth_pos.y = face_pos.y  # mouth is dead center
+
+                    left_eye_pos.z = face_pos.z + 0.06  # left eye is 6cm above the center
+                    right_eye_pos.z = face_pos.z + 0.06  # right eye is 6cm above the center
+                    mouth_pos.z = face_pos.z - 0.04  # mouth is 4cm below the center
+
+                    if self.eyecontact == EyeContact.IDLE:
+                        # look at center of the head
+                        self.SetHeadFocus(face_pos)
+
+                    elif self.eyecontact == EyeContact.LEFT_EYE:
+                        # look at left eye
+                        self.SetHeadFocus(left_eye_pos)
+
+                    elif self.eyecontact == EyeContact.RIGHT_EYE:
+                        # look at right eye
+                        self.SetHeadFocus(right_eye_pos)
+
+                    elif self.eyecontact == EyeContact.BOTH_EYES:
+                        # switch between eyes back and forth
+                        self.eyes_counter -= 1
+                        if self.eyes_counter == 0:
+                            self.eyes_counter = random.randint(self.eyes_counter_min,self.eyes_counter_max)
+                            if self.current_eye == 1:
+                                self.current_eye = 0
+                            else:
+                                self.current_eye = 1
+                        # look at that eye
+                        if self.current_eye == 0:
+                            cur_eye_pos = left_eye_pos
+                        else:
+                            cur_eye_pos = right_eye_pos
+                        self.SetHeadFocus(cur_eye_pos)
+
+                    elif self.eyecontact == EyeContact.TRIANGLE:
+                        # cycle between eyes and mouth
+                        self.eyes_counter -= 1
+                        if self.eyes_counter == 0:
+                            self.eyes_counter = random.randint(self.eyes_counter_min,self.eyes_counter_max)
+                            if self.current_eye == 2:
+                                self.current_eye = 0
+                            else:
+                                self.current_eye += 1
+                        # look at that eye
+                        if self.current_eye == 0: 
+                            cur_eye_pos = left_eye_pos
+                        elif self.current_eye == 1:
+                            cur_eye_pos = right_eye_pos
+                        elif self.current_eye == 2:
+                            cur_eye_pos = mouth_pos
+                        self.SetHeadFocus(cur_eye_pos)
+
+                    # TODO: implement mirroring to current face
+
+            # TODO: start random expressions like RealSense Tracker
+
+            # TODO: start random gestures like RealSense Tracker
+
+            prune_before_time = ts - rospy.Duration.from_sec(self.keep_time)
+
+            # flush faces dictionary, update current face accordingly
+            to_be_removed = []
+            for face in self.faces.values():
+                if face.ts < prune_before_time:
+                    to_be_removed.append(face.cface_id)
+            # remove the elements
+            for key in to_be_removed:
+                del self.faces[key]
+                # make sure the selected face is always valid
+                if self.current_face_id == key:
                     self.SelectNextFace()
-
-            # take the current face
-            if self.current_face_id != 0:
-                curface = self.faces[self.current_face_id]
-                face_pos = curface.position
-
-                # ==== handle eyecontact (only for LookAt.ONE_FACE and LookAt.ALL_FACES)
-
-                # calculate where left eye, right eye and mouth are on the current face
-                left_eye_pos = Float32XYZ()
-                right_eye_pos = Float32XYZ()
-                mouth_pos = Float32XYZ()
-
-                # all are 5cm in front of the center of the face
-                left_eye_pos.x = face_pos.x - 0.05
-                right_eye_pos.x = face_pos.x - 0.05
-                mouth_pos.x = face_pos.x - 0.05
-
-                left_eye_pos.y = face_pos.y + 0.03  # left eye is 3cm to the left of the center
-                right_eye_pos.y = face_pos.y - 0.03  # right eye is 3cm to the right of the center
-                mouth_pos.y = face_pos.y  # mouth is dead center
-
-                left_eye_pos.z = face_pos.z + 0.06  # left eye is 6cm above the center
-                right_eye_pos.z = face_pos.z + 0.06  # right eye is 6cm above the center
-                mouth_pos.z = face_pos.z - 0.04  # mouth is 4cm below the center
-
-                if self.eyecontact == EyeContact.IDLE:
-                    # look at center of the head
-                    self.SetHeadFocus(face_pos)
-
-                elif self.eyecontact == EyeContact.LEFT_EYE:
-                    # look at left eye
-                    self.SetHeadFocus(left_eye_pos)
-
-                elif self.eyecontact == EyeContact.RIGHT_EYE:
-                    # look at right eye
-                    self.SetHeadFocus(right_eye_pos)
-
-                elif self.eyecontact == EyeContact.BOTH_EYES:
-                    # switch between eyes back and forth
-                    self.eyes_counter -= 1
-                    if self.eyes_counter == 0:
-                        self.eyes_counter = random.randint(self.eyes_counter_min,self.eyes_counter_max)
-                        if self.current_eye == 1:
-                            self.current_eye = 0
-                        else:
-                            self.current_eye = 1
-                    # look at that eye
-                    if self.current_eye == 0:
-                        cur_eye_pos = left_eye_pos
-                    else:
-                        cur_eye_pos = right_eye_pos
-                    self.SetHeadFocus(cur_eye_pos)
-
-                elif self.eyecontact == EyeContact.TRIANGLE:
-                    # cycle between eyes and mouth
-                    self.eyes_counter -= 1
-                    if self.eyes_counter == 0:
-                        self.eyes_counter = random.randint(self.eyes_counter_min,self.eyes_counter_max)
-                        if self.current_eye == 2:
-                            self.current_eye = 0
-                        else:
-                            self.current_eye += 1
-                    # look at that eye
-                    if self.current_eye == 0: 
-                        cur_eye_pos = left_eye_pos
-                    elif self.current_eye == 1:
-                        cur_eye_pos = right_eye_pos
-                    elif self.current_eye == 2:
-                        cur_eye_pos = mouth_pos
-                    self.SetHeadFocus(cur_eye_pos)
-
-        # TODO: start random expressions like RealSense Tracker
-
-        # TODO: start random gestures like RealSense Tracker
-
-        prune_before_time = ts - rospy.Duration.from_sec(self.keep_time)
-
-        # flush faces dictionary, update current face accordingly
-        to_be_removed = []
-        for face in self.faces.values():
-            if face.ts < prune_before_time:
-                to_be_removed.append(face.cface_id)
-        # remove the elements
-        for key in to_be_removed:
-            del self.faces[key]
-            # make sure the selected face is always valid
-            if self.current_face_id == key:
-                self.SelectNextFace()
                 
-        # remove hand if it is too old
-        if self.hand != None:
-            if self.hand.ts < prune_before_time:
-                self.hand = None
+            # remove hand if it is too old
+            if self.hand != None:
+                if self.hand.ts < prune_before_time:
+                    self.hand = None
 
-        # flush saliency dictionary
-        to_be_removed = []
-        for key in self.saliencies.keys():
-            if key < prune_before_time:
-                to_be_removed.append(key)
-        # remove the elements
-        for key in to_be_removed:
-            del self.saliencies[key]
-            # make sure the selected saliency is always valid
-            if self.current_saliency_ts == key:
-                self.SelectNextSaliency()
+            # flush saliency dictionary
+            to_be_removed = []
+            for key in self.saliencies.keys():
+                if key < prune_before_time:
+                    to_be_removed.append(key)
+            # remove the elements
+            for key in to_be_removed:
+                del self.saliencies[key]
+                # make sure the selected saliency is always valid
+                if self.current_saliency_ts == key:
+                    self.SelectNextSaliency()
 
 
     def SetEyeContact(self, neweyecontact):
@@ -350,6 +411,8 @@ class Behavior:
             return
 
         self.eyecontact = neweyecontact
+
+        print("EyeContact {}".format(self.eyecontact))
 
         # initialize new eyecontact
         if self.eyecontact == EyeContact.IDLE:
@@ -374,6 +437,8 @@ class Behavior:
             return
 
         self.lookat = newlookat
+
+        print("LookAt {}".format(self.lookat))
 
         # initialize new lookat
         if self.lookat == LookAt.IDLE:
@@ -406,6 +471,40 @@ class Behavior:
             ()
 
 
+    def SetMirroring(self, newmirroring):
+
+        if newmirroring == self.mirroring:
+            return
+
+        self.mirroring = newmirroring
+
+        print("Mirroring {}".format(self.mirroring))
+
+        if self.mirroring == Mirroring.IDLE:
+            ()
+
+        elif self.mirroring == Mirroring.EYEBROWS:
+            ()
+
+        elif self.mirroring == Mirroring.EYELIDS:
+            ()
+
+        elif self.mirroring == Mirroring.EYES:
+            ()
+
+        elif self.mirroring == Mirroring.MOUTH:
+            ()
+
+        elif self.mirroring == Mirroring.MOUTH_EYEBROWS:
+            ()
+
+        elif self.mirroring == Mirroring.MOUTH_EYELIDS:
+            ()
+
+        elif self.mirroring == Mirroring.ALL:
+            ()
+
+
     # ==== MAIN STATE MACHINE
 
     def SetState(self, newstate):
@@ -416,6 +515,8 @@ class Behavior:
             return
 
         self.state = newstate
+
+        print("State {}".format(self.state))
 
         # initialize new state
         if self.state == State.SLEEPING:
@@ -447,103 +548,76 @@ class Behavior:
             ()
 
 
-    def HandleBehaviorConfig(self, config, level):
-
-        if config.enable_flag != self.enable_flag:
-            self.enable_flag = config.enable_flag
-            # TODO: enable or disable the behaviors
-
-        if config.synthesizer_rate != self.synthesizer_rate:
-            self.synthesizer_rate = config.synthesizer_rate
-            self.timer.shutdown()
-            self.timer = rospy.Timer(rospy.Duration(1.0 / self.synthesizer_rate),self.HandleTimer)
-
-        # update the counter ranges (and counters if the ranges changed)
-        if config.saliency_counter_min != self.saliency_counter_min or config.saliency_counter_max != self.saliency_counter_max:
-            self.saliency_counter_min = config.saliency_counter_min
-            self.saliency_counter_max = config.saliency_counter_max
-            self.saliency_counter = random.randint(self.saliency_counter_min,self.saliency_counter_max)
-
-        if config.faces_counter_min != self.faces_counter_min or config.faces_counter_max != self.faces_counter_max:
-            self.faces_counter_min = config.faces_counter_min
-            self.faces_counter_max = config.faces_counter_max
-            self.faces_counter = random.randint(self.faces_counter_min,self.faces_counter_max)
-
-        if config.eyes_counter_min != self.eyes_counter_min or config.eyes_counter_max != self.eyes_counter_max:
-            self.eyes_counter_min = config.eyes_counter_min
-            self.eyes_counter_max = config.eyes_counter_max
-            self.eyes_counter = random.randint(self.eyes_counter_min,self.eyes_counter_max)
-        
-        if config.audience_counter_min != self.audience_counter_min or config.audience_counter_max != self.audience_counter_max:
-            self.audience_counter_min = config.audience_counter_min
-            self.audience_counter_max = config.audience_counter_max
-            self.audience_counter = random.randint(self.audience_counter_min,self.audience_counter_max)
-        
-        # keep time
-        self.keep_time = config.keep_time
-
-        # and set the states for each state machine
-        self.SetLookAt(config.lookat_state)
-
-        self.SetEyeContact(config.eyecontact_state)
-
-        # and finally the overall state
-        self.SetState(config.state)
-
-        return config
-
-
     def HandleFace(self, msg):
 
-        self.faces[msg.cface_id] = msg
-        self.last_face = msg.cface_id
+        with self.lock:
 
-        # TEMP: if there is no current face, make this the current face
-        if self.current_face_id == 0:
-            self.current_face_id = msg.cface_id
+            self.faces[msg.cface_id] = msg
+            self.last_face = msg.cface_id
+
+            # TEMP: if there is no current face, make this the current face
+            if self.current_face_id == 0:
+                self.current_face_id = msg.cface_id
 
 
     def HandleHand(self, msg):
 
-        self.hand = msg
+        with self.lock:
+
+            self.hand = msg
 
 
     def HandleSaliency(self, msg):
 
-        self.saliencies[msg.ts] = msg
+        with self.lock:
 
-        # TEMP: if there is no current saliency vector, make this the current saliency vector
-        if self.current_saliency_ts == 0:
-            self.current_saliency_ts = msg.ts
+            self.saliencies[msg.ts] = msg
+
+            # TEMP: if there is no current saliency vector, make this the current saliency vector
+            if self.current_saliency_ts == 0:
+                self.current_saliency_ts = msg.ts
 
 
     def HandleChatEvents(self, msg):
-        # triggered when someone starts talking to the robot
 
-        # go to listening state if robot is not talking
-        #if self.state != State.USERS_SPEAKING:
-        #    self.SetState(State.USERS_LISTENING)
+        with self.lock:
+
+            # triggered when someone starts talking to the robot
+
+            # go to listening state if robot is not talking
+            #if self.state != State.USERS_SPEAKING:
+            #    self.SetState(State.USERS_LISTENING)
+            ()
 
 
     def HandleSpeechEvents(self, msg):
-        print("{}".format(msg))
-        # triggered when the robot starts or stops talking
-        #if msg.data == "start":
-            # robot starts talking
-            #self.SetState(State.USERS_SPEAKING)
-        #elif msg.data == "stop":
-            # robot stops talking
-            #self.SetState(State.USERS_IDLE)
+
+        with self.lock:
+
+            print("{}".format(msg))
+            # triggered when the robot starts or stops talking
+            #if msg.data == "start":
+                # robot starts talking
+                #self.SetState(State.USERS_SPEAKING)
+            #elif msg.data == "stop":
+                # robot stops talking
+                #self.SetState(State.USERS_IDLE)
 
 
     def HandleAudioDirection(self, msg):
-        # use to correlate with person speaking to select correct current face
-        ()
+
+        with self.lock:
+
+            # use to correlate with person speaking to select correct current face
+            ()
 
 
     def HandleMotion(self, msg):
-        # use to trigger awareness of people even without seeing them
-        ()
+
+        with self.lock:
+
+            # use to trigger awareness of people even without seeing them
+            ()
 
 
 if __name__ == "__main__":
