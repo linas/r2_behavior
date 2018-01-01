@@ -1,0 +1,238 @@
+sleeping_expressions:
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy.001,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy.002,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 1, magnitude_max: 0.8, magnitude_min: 0.5, name: comprehending,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 3, magnitude_max: 0.8, magnitude_min: 0.5, name: amused,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 3, magnitude_max: 0.8, magnitude_min: 0.5, name: confused,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 0.5, magnitude_min: 0.4, name: happySurprise,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: engaged,
+    probability: 0.1}
+sleeping_gestures:
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.001, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.002, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.003, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: nod-2, probability: 0.1, speed_max: 1.5,
+    speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.8, name: nod-3, probability: 0.1, speed_max: 1.5,
+    speed_min: 0.6}
+  - {magnitude_max: 0.9, magnitude_min: 0.5, name: look-L.UP, probability: 0.1, speed_max: 1.2,
+    speed_min: 0.8}
+  - {magnitude_max: 0.9, magnitude_min: 0.5, name: look-R.UP, probability: 0.1, speed_max: 1.2,
+    speed_min: 0.8}
+idle_expressions:
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy.001,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy.002,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 1, magnitude_max: 0.8, magnitude_min: 0.5, name: comprehending,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 3, magnitude_max: 0.8, magnitude_min: 0.5, name: amused,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 3, magnitude_max: 0.8, magnitude_min: 0.5, name: confused,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 0.5, magnitude_min: 0.4, name: happySurprise,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: engaged,
+    probability: 0.1}
+idle_gestures:
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.001, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.002, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.003, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: nod-2, probability: 0.1, speed_max: 1.5,
+    speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.8, name: nod-3, probability: 0.1, speed_max: 1.5,
+    speed_min: 0.6}
+  - {magnitude_max: 0.9, magnitude_min: 0.5, name: look-L.UP, probability: 0.1, speed_max: 1.2,
+    speed_min: 0.8}
+  - {magnitude_max: 0.9, magnitude_min: 0.5, name: look-R.UP, probability: 0.1, speed_max: 1.2,
+    speed_min: 0.8}
+interested_expressions:
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy.001,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy.002,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 1, magnitude_max: 0.8, magnitude_min: 0.5, name: comprehending,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 3, magnitude_max: 0.8, magnitude_min: 0.5, name: amused,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 3, magnitude_max: 0.8, magnitude_min: 0.5, name: confused,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 0.5, magnitude_min: 0.4, name: happySurprise,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: engaged,
+    probability: 0.1}
+interested_gestures:
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.001, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.002, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.003, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: nod-2, probability: 0.1, speed_max: 1.5,
+    speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.8, name: nod-3, probability: 0.1, speed_max: 1.5,
+    speed_min: 0.6}
+  - {magnitude_max: 0.9, magnitude_min: 0.5, name: look-L.UP, probability: 0.1, speed_max: 1.2,
+    speed_min: 0.8}
+  - {magnitude_max: 0.9, magnitude_min: 0.5, name: look-R.UP, probability: 0.1, speed_max: 1.2,
+    speed_min: 0.8}
+focused_expressions:
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy.001,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy.002,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 1, magnitude_max: 0.8, magnitude_min: 0.5, name: comprehending,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 3, magnitude_max: 0.8, magnitude_min: 0.5, name: amused,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 3, magnitude_max: 0.8, magnitude_min: 0.5, name: confused,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 0.5, magnitude_min: 0.4, name: happySurprise,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: engaged,
+    probability: 0.1}
+focused_gestures:
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.001, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.002, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.003, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: nod-2, probability: 0.1, speed_max: 1.5,
+    speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.8, name: nod-3, probability: 0.1, speed_max: 1.5,
+    speed_min: 0.6}
+  - {magnitude_max: 0.9, magnitude_min: 0.5, name: look-L.UP, probability: 0.1, speed_max: 1.2,
+    speed_min: 0.8}
+  - {magnitude_max: 0.9, magnitude_min: 0.5, name: look-R.UP, probability: 0.1, speed_max: 1.2,
+    speed_min: 0.8}
+speaking_expressions:
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy.001,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy.002,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 1, magnitude_max: 0.8, magnitude_min: 0.5, name: comprehending,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 3, magnitude_max: 0.8, magnitude_min: 0.5, name: amused,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 3, magnitude_max: 0.8, magnitude_min: 0.5, name: confused,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 0.5, magnitude_min: 0.4, name: happySurprise,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: engaged,
+    probability: 0.1}
+speaking_gestures:
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.001, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.002, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.003, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: nod-2, probability: 0.1, speed_max: 1.5,
+    speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.8, name: nod-3, probability: 0.1, speed_max: 1.5,
+    speed_min: 0.6}
+  - {magnitude_max: 0.9, magnitude_min: 0.5, name: look-L.UP, probability: 0.1, speed_max: 1.2,
+    speed_min: 0.8}
+  - {magnitude_max: 0.9, magnitude_min: 0.5, name: look-R.UP, probability: 0.1, speed_max: 1.2,
+    speed_min: 0.8}
+listening_expressions:
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy.001,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy.002,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 1, magnitude_max: 0.8, magnitude_min: 0.5, name: comprehending,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 3, magnitude_max: 0.8, magnitude_min: 0.5, name: amused,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 3, magnitude_max: 0.8, magnitude_min: 0.5, name: confused,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 0.5, magnitude_min: 0.4, name: happySurprise,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: engaged,
+    probability: 0.1}
+listening_gestures:
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.001, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.002, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.003, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: nod-2, probability: 0.1, speed_max: 1.5,
+    speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.8, name: nod-3, probability: 0.1, speed_max: 1.5,
+    speed_min: 0.6}
+  - {magnitude_max: 0.9, magnitude_min: 0.5, name: look-L.UP, probability: 0.1, speed_max: 1.2,
+    speed_min: 0.8}
+  - {magnitude_max: 0.9, magnitude_min: 0.5, name: look-R.UP, probability: 0.1, speed_max: 1.2,
+    speed_min: 0.8}
+presenting_expressions:
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy.001,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy.002,
+    probability: 0.2}
+  - {duration_max: 8, duration_min: 1, magnitude_max: 0.8, magnitude_min: 0.5, name: comprehending,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 3, magnitude_max: 0.8, magnitude_min: 0.5, name: amused,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 3, magnitude_max: 0.8, magnitude_min: 0.5, name: confused,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 0.5, magnitude_min: 0.4, name: happySurprise,
+    probability: 0.1}
+  - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: engaged,
+    probability: 0.1}
+presenting__gestures:
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.001, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.002, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: think-browsUp.003, probability: 0.05,
+    speed_max: 1.5, speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.6, name: nod-2, probability: 0.1, speed_max: 1.5,
+    speed_min: 0.6}
+  - {magnitude_max: 1, magnitude_min: 0.8, name: nod-3, probability: 0.1, speed_max: 1.5,
+    speed_min: 0.6}
+  - {magnitude_max: 0.9, magnitude_min: 0.5, name: look-L.UP, probability: 0.1, speed_max: 1.2,
+    speed_min: 0.8}
+  - {magnitude_max: 0.9, magnitude_min: 0.5, name: look-R.UP, probability: 0.1, speed_max: 1.2,
+    speed_min: 0.8}

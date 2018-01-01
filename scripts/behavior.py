@@ -76,6 +76,31 @@ class State(Enum):
     # speaking/listening behavior as per rough video analysis early december 2017
 
 
+class YamlConfig:
+    @staticmethod
+    def parse(config_dir, filename):
+        with open(os.path.join(config_dir, filename), 'r') as stream:
+            try:
+                return json.dumps(yaml.load(stream))
+            except yaml.YAMLError as exc:
+                return False
+
+    @staticmethod
+    def load(config_dir, filename):
+        with open(os.path.join(config_dir, filename), 'r') as stream:
+            try:
+                return yaml.load(stream)
+            except yaml.YAMLError as exc:
+                return exc
+
+    @staticmethod
+    def save(config_dir, filename, data):
+        try:
+            with open(os.path.join(config_dir, filename), 'w') as yaml_file:
+                yaml.safe_dump(data, yaml_file)
+        except:
+            return False
+
 class Behavior:
 
     def __init__(self):
@@ -85,6 +110,7 @@ class Behavior:
 
         self.robot_name = rospy.get_param("/robot_name")
 
+        self.config_dir = os.path.join(rospy.get_param("/robots_config_dir"), 'heads', self.robot_name)
         # setup face, hand and saliency structures
         self.faces = {}  # index = cface_id, which should be relatively steady from vision_pipeline
         self.current_face_id = 0  # cface_id of current face
@@ -143,6 +169,17 @@ class Behavior:
 
         with self.lock:
 
+            # Load gestures and expressions from configs first time loaded
+            if config.reload_animations or (self.animations == None):
+                try:
+                    self.animations = YamlConfig.load(self.config_dir, 'r2_behavior_anim.yaml')
+                    config.reload_animations = False
+                except IOError:
+                    self.animations = YamlConfig.load(os.path.join(os.path.dirname(os.path.dirname(__file__)),'cfg'),
+                                                        'r2_behavior_anim.default.yaml')
+
+                    config.reload_animations = False
+
             if self.enable_flag != config.enable_flag:
                 self.enable_flag = config.enable_flag
                 # TODO: enable or disable the behaviors
@@ -167,12 +204,12 @@ class Behavior:
                 self.eyes_counter_min = config.eyes_counter_min
                 self.eyes_counter_max = config.eyes_counter_max
                 self.eyes_counter = random.randint(self.eyes_counter_min,self.eyes_counter_max)
-        
+
             if config.audience_counter_min != self.audience_counter_min or config.audience_counter_max != self.audience_counter_max:
                 self.audience_counter_min = config.audience_counter_min
                 self.audience_counter_max = config.audience_counter_max
                 self.audience_counter = random.randint(self.audience_counter_min,self.audience_counter_max)
-        
+
             # keep time
             self.keep_time = config.keep_time
 
@@ -359,7 +396,7 @@ class Behavior:
                             else:
                                 self.current_eye += 1
                         # look at that eye
-                        if self.current_eye == 0: 
+                        if self.current_eye == 0:
                             cur_eye_pos = left_eye_pos
                         elif self.current_eye == 1:
                             cur_eye_pos = right_eye_pos

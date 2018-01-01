@@ -10,3 +10,10 @@ def parse(filename):
             return json.dumps(yaml.load(stream))
         except yaml.YAMLError as exc:
             return False
+
+def load(filename):
+    with open(os.path.join(current_dir, filename + '.yaml'), 'r') as stream:
+        try:
+            return yaml.load(stream)
+        except yaml.YAMLError as exc:
+            return False

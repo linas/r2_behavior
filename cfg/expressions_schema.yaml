@@ -1,30 +1,29 @@
-expressions:
-  type: array
-  format: table
-  items:
-    type: object
-    properties:
-      name:
-        title: 'Name'
-        propertyOrder: 1
-        type: string
-      probability:
-        title: 'Probability'
-        propertyOrder: 2
-        type: number
-      magnitude_min:
-        title: 'Min. Magnitude'
-        propertyOrder: 3
-        type: number
-      magnitude_max:
-        title: 'Max. Magnitude'
-        propertyOrder: 4
-        type: number
-      duration_min:
-        title: 'Min. Duration (sec)'
-        propertyOrder: 5
-        type: number
-      duration_max:
-        title: 'Max. Duration (sec)'
-        propertyOrder: 6
-        type: number
+type: array
+format: table
+items:
+  type: object
+  properties:
+    name:
+      title: 'Name'
+      propertyOrder: 1
+      type: string
+    probability:
+      title: 'Probability'
+      propertyOrder: 2
+      type: number
+    magnitude_min:
+      title: 'Min. Magnitude'
+      propertyOrder: 3
+      type: number
+    magnitude_max:
+      title: 'Max. Magnitude'
+      propertyOrder: 4
+      type: number
+    duration_min:
+      title: 'Min. Duration (sec)'
+      propertyOrder: 5
+      type: number
+    duration_max:
+      title: 'Max. Duration (sec)'
+      propertyOrder: 6
+      type: number
