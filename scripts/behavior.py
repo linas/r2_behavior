@@ -242,14 +242,14 @@ class Behavior:
         self.hand_events_pub = rospy.Publisher('/hand_events', String, queue_size=1)
 
         # dynamic reconfigure client to the vision pipelines
-        self.lefteye_config = dynamic_reconfigure.client.Client("/{}/perception/lefteye/vision_pipeline".format(self.robot_name),timeout=30,config_callback=self.HandleLeftEyeConfig)
-        self.righteye_config = dynamic_reconfigure.client.Client("/{}/perception/righteye/vision_pipeline".format(self.robot_name),timeout=30,config_callback=self.HandleRightEyeConfig)
+        # self.lefteye_config = dynamic_reconfigure.client.Client("/{}/perception/lefteye/vision_pipeline".format(self.robot_name),timeout=30,config_callback=self.HandleLeftEyeConfig)
+        # self.righteye_config = dynamic_reconfigure.client.Client("/{}/perception/righteye/vision_pipeline".format(self.robot_name),timeout=30,config_callback=self.HandleRightEyeConfig)
         self.wideangle_config = dynamic_reconfigure.client.Client("/{}/perception/wideangle/vision_pipeline".format(self.robot_name),timeout=30,config_callback=self.HandleWideAngleConfig)
         self.realsense_config = dynamic_reconfigure.client.Client("/{}/perception/realsense/vision_pipeline".format(self.robot_name),timeout=30,config_callback=self.HandleRealSenseConfig)
 
         # TEMP: set all pipelines to 1Hz
-        self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-        self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+        # self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+        # self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
         self.wideangle_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
         self.realsense_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
 
@@ -876,8 +876,8 @@ class Behavior:
             print("State.IDLE")
             self.current_gestures_name = "idle_gestures"
             self.current_expressions_name = "idle_expressions"
-            self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+            # self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+            # self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
             self.wideangle_config.update_configuration({"pipeline_rate":10.0,"detect_rate":10.0})
             self.realsense_config.update_configuration({"pipeline_rate":10.0,"detect_rate":20.0})
             self.SetEyeContact(EyeContact.IDLE)
@@ -890,8 +890,8 @@ class Behavior:
             print("State.INTERESTED")
             self.current_gestures_name = "interested_gestures"
             self.current_expressions_name = "interested_expressions"
-            self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+            # self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+            # self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
             self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":10.0})
             self.realsense_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.SetEyeContact(EyeContact.IDLE)
@@ -904,8 +904,8 @@ class Behavior:
             print("State.FOCUSED")
             self.current_gestures_name = "focused_gestures"
             self.current_expressions_name = "focused_expressions"
-            self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+            # self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+            # self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
             self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.realsense_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.SetEyeContact(EyeContact.IDLE)
@@ -918,8 +918,8 @@ class Behavior:
             print("State.SPEAKING")
             self.current_gestures_name = "speaking_gestures"
             self.current_expressions_name = "speaking_expressions"
-            self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+            # self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+            # self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
             self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":10.0})
             self.realsense_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.SetEyeContact(EyeContact.IDLE)
@@ -933,8 +933,8 @@ class Behavior:
             print("State.LISTENING")
             self.current_gestures_name = "listening_gestures"
             self.current_expressions_name = "listening_expressions"
-            self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+            # self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+            # self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
             self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.realsense_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.SetEyeContact(EyeContact.BOTH_EYES)
@@ -948,8 +948,8 @@ class Behavior:
             print("State.PRESENTING")
             self.current_gestures_name = "presenting_gestures"
             self.current_expressions_name = "presenting_expressions"
-            self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+            # self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+            # self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
             self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":10.0})
             self.realsense_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.SetEyeContact(EyeContact.IDLE)
