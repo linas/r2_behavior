@@ -19,7 +19,7 @@ from blender_api_msgs.msg import Target, EmotionState, SetGesture
 from std_msgs.msg import String, Float64, UInt8
 from r2_perception.msg import Float32XYZ, CandidateFace, CandidateHand, CandidateSaliency, AudioDirection, MotionVector
 from hr_msgs.msg import TTS
-from pau2motors.msg import pau
+from hr_msgs.msg import pau
 
 
 # in interactive settings with people, the EyeContact machine is used to define specific states for eye contact
