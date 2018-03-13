@@ -17,7 +17,7 @@ import dynamic_reconfigure.client
 from r2_behavior.cfg import BehaviorConfig
 from blender_api_msgs.msg import Target, EmotionState, SetGesture
 from std_msgs.msg import String, Float64, UInt8
-from r2_perception.msg import Float32XYZ, CandidateFace, CandidateHand, CandidateSaliency, AudioDirection, MotionVector
+from r2_perception.msg import Float32XYZ, EstablishedFace, CandidateHand, CandidateSaliency, AudioDirection, MotionVector
 from hr_msgs.msg import TTS
 from hr_msgs.msg import pau
 
@@ -163,9 +163,9 @@ class Behavior:
 
         self.config_dir = os.path.join(rospy.get_param("/robots_config_dir"), 'heads', self.robot_name)
         # setup face, hand and saliency structures
-        self.faces = {}  # index = cface_id, which should be relatively steady from vision_pipeline
-        self.current_face_id = 0  # cface_id of current face
-        self.last_face_id = 0  # most recent cface_id of added face
+        self.faces = {}  # index = eface_id, which should be relatively steady from vision_pipeline
+        self.current_face_id = 0  # eface_id of current face
+        self.last_face_id = 0  # most recent eface_id of added face
         self.last_talk_ts = 0  # ts of last seen face or talking
         self.hand = None  # current hand
         self.last_hand_ts = 0  # ts of last seen hand
@@ -221,9 +221,9 @@ class Behavior:
         self.gaze = Gaze.GAZE_ONLY
         self.state = State.SLEEPING
 
-        # take candidate streams exactly like RealSense Tracker until fusion is better defined and we can rely on combined camera stuff
-        rospy.Subscriber('/{}/perception/realsense/cface'.format(self.robot_name), CandidateFace, self.HandleFace)
-        rospy.Subscriber('/{}/perception/realsense/chand'.format(self.robot_name), CandidateHand, self.HandleHand)
+        # take faces from fusion and saliency from wideangle (for now)
+        rospy.Subscriber('/{}/perception/face'.format(self.robot_name), EstablishedFace, self.HandleFace)
+        #rospy.Subscriber('/{}/perception/realsense/chand'.format(self.robot_name), CandidateHand, self.HandleHand)
         rospy.Subscriber('/{}/perception/wideangle/csaliency'.format(self.robot_name), CandidateSaliency, self.HandleSaliency)
         rospy.Subscriber('/{}/perception/acousticmagic/raw_audiodir'.format(self.robot_name), AudioDirection, self.HandleAudioDirection)
         rospy.Subscriber('/{}/perception/motion/raw_motion'.format(self.robot_name), MotionVector, self.HandleMotion)
@@ -248,10 +248,10 @@ class Behavior:
         self.realsense_config = dynamic_reconfigure.client.Client("/{}/perception/realsense/vision_pipeline".format(self.robot_name),timeout=30,config_callback=self.HandleRealSenseConfig)
 
         # TEMP: set all pipelines to 1Hz
-        # self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-        # self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-        self.wideangle_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-        self.realsense_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+        # self.lefteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+        # self.righteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+        self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+        self.realsense_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
 
         # start timer
         self.config_server = FakeConfigServer()  # this is a workaround because self.HandleTimer could be triggered before the config_server actually exists
@@ -431,20 +431,20 @@ class Behavior:
         self.gaze_pos = pos
 
         if self.gaze == Gaze.GAZE_ONLY:
-            self.SetGazeFocus(pos,5.0)
+            self.SetGazeFocus(pos,1.0)
 
         elif self.gaze == Gaze.HEAD_ONLY:
-            self.SetHeadFocus(pos,3.0)
+            self.SetHeadFocus(pos,1.0)
 
         elif self.gaze == Gaze.GAZE_AND_HEAD:
-            self.SetGazeFocus(pos,5.0)
-            self.SetHeadFocus(pos,3.0)
+            self.SetGazeFocus(pos,1.0)
+            self.SetHeadFocus(pos,1.0)
 
         elif self.gaze == Gaze.GAZE_LEADS_HEAD:
-            self.SetGazeFocus(pos,5.0)
+            self.SetGazeFocus(pos,1.0)
 
         elif self.gaze == Gaze.HEAD_LEADS_GAZE:
-            self.SetHeadFocus(pos,3.0)
+            self.SetHeadFocus(pos,1.0)
 
 
     def SelectNextFace(self):
@@ -703,7 +703,7 @@ class Behavior:
         to_be_removed = []
         for face in self.faces.values():
             if face.ts < prune_before_time:
-                to_be_removed.append(face.cface_id)
+                to_be_removed.append(face.eface_id)
         # remove the elements
         for key in to_be_removed:
             del self.faces[key]
@@ -860,10 +860,10 @@ class Behavior:
             print("State.SLEEPING")
             self.current_gestures_name = "sleeping_gestures"
             self.current_expressions_name = "sleeping_expressions"
-            #self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            #self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            #self.wideangle_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            #self.realsense_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+            #self.lefteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+            #self.righteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+            #self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+            #self.realsense_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             #self.SetEyeContact(EyeContact.IDLE)
             #self.SetLookAt(LookAt.IDLE)
             #self.SetMirroring(Mirroring.IDLE)
@@ -876,10 +876,10 @@ class Behavior:
             print("State.IDLE")
             self.current_gestures_name = "idle_gestures"
             self.current_expressions_name = "idle_expressions"
-            # self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            # self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            self.wideangle_config.update_configuration({"pipeline_rate":10.0,"detect_rate":10.0})
-            self.realsense_config.update_configuration({"pipeline_rate":10.0,"detect_rate":20.0})
+            # self.lefteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+            # self.righteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+            self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+            self.realsense_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.SetEyeContact(EyeContact.IDLE)
             self.SetLookAt(LookAt.IDLE)
             self.SetMirroring(Mirroring.IDLE)
@@ -890,9 +890,9 @@ class Behavior:
             print("State.INTERESTED")
             self.current_gestures_name = "interested_gestures"
             self.current_expressions_name = "interested_expressions"
-            # self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            # self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":10.0})
+            # self.lefteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+            # self.righteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+            self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.realsense_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.SetEyeContact(EyeContact.IDLE)
             self.SetLookAt(LookAt.SALIENCY)
@@ -904,8 +904,8 @@ class Behavior:
             print("State.FOCUSED")
             self.current_gestures_name = "focused_gestures"
             self.current_expressions_name = "focused_expressions"
-            # self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            # self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+            # self.lefteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+            # self.righteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.realsense_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.SetEyeContact(EyeContact.IDLE)
@@ -918,9 +918,9 @@ class Behavior:
             print("State.SPEAKING")
             self.current_gestures_name = "speaking_gestures"
             self.current_expressions_name = "speaking_expressions"
-            # self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            # self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":10.0})
+            # self.lefteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+            # self.righteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+            self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.realsense_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.SetEyeContact(EyeContact.IDLE)
             self.SetLookAt(LookAt.AVOID)
@@ -933,8 +933,8 @@ class Behavior:
             print("State.LISTENING")
             self.current_gestures_name = "listening_gestures"
             self.current_expressions_name = "listening_expressions"
-            # self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            # self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
+            # self.lefteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+            # self.righteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.realsense_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.SetEyeContact(EyeContact.BOTH_EYES)
@@ -948,9 +948,9 @@ class Behavior:
             print("State.PRESENTING")
             self.current_gestures_name = "presenting_gestures"
             self.current_expressions_name = "presenting_expressions"
-            # self.lefteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            # self.righteye_config.update_configuration({"pipeline_rate":1.0,"detect_rate":1.0})
-            self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":10.0})
+            # self.lefteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+            # self.righteye_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
+            self.wideangle_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.realsense_config.update_configuration({"pipeline_rate":20.0,"detect_rate":20.0})
             self.SetEyeContact(EyeContact.IDLE)
             self.SetLookAt(LookAt.AUDIENCE)
@@ -960,13 +960,13 @@ class Behavior:
 
     def HandleFace(self, msg):
 
-        self.faces[msg.cface_id] = msg
-        self.last_face = msg.cface_id
+        self.faces[msg.eface_id] = msg
+        self.last_face_id = msg.eface_id
         self.last_talk_ts = msg.ts
 
         # TEMP: if there is no current face, make this the current face
         if self.current_face_id == 0:
-            self.current_face_id = msg.cface_id
+            self.current_face_id = msg.eface_id
 
 
     def HandleHand(self, msg):
