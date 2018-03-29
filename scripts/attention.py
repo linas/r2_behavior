@@ -363,6 +363,8 @@ class Attention:
     def HandleTimer(self, data):
         if not self.configs_init:
             return False
+        if not self.enable_flag:
+            return False
         # this is the heart of the synthesizer, here the lookat and eyecontact state machines take care of where the robot is looking, and random expressions and gestures are triggered to look more alive (like RealSense Tracker)
 
         ts = data.current_expected

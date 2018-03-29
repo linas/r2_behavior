@@ -92,6 +92,8 @@ generate_dynamic_reconfigure_options(
   cfg/Behavior.cfg
   cfg/Attention.cfg
   cfg/Animation.cfg
+  cfg/States.cfg
+  cfg/State.cfg
 )
 
 ###################################
