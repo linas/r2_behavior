@@ -1,0 +1,7 @@
+<launch>
+    <group ns="/behavior">
+        <node name="attention" pkg="r2_behavior" type="attention.py" respawn="true" output="screen"/>
+        <node name="animation" pkg="r2_behavior" type="animation.py" respawn="true" output="screen"/>
+        <node name="states" pkg="r2_behavior" type="states.py" respawn="true" output="screen"/>
+    </group>
+</launch>
