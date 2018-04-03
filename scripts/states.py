@@ -53,6 +53,7 @@ ANIMATIONS = ATTENTION
 TRANSITIONS = [
     ['start_interacting', '*', 'interacting'],
     ['start_presentation', '*', 'presenting'],
+    ['go_idle', '*', 'idle'],
     ['run_timeline', 'presenting_waiting', 'presenting_performing'],
     ['timeline_paused', 'presenting_performing', 'presenting_waiting'],
     ['timeline_finished', 'presenting_performing', 'presenting_waiting'],  # Need to consider if should sswitch back to interacting
@@ -109,7 +110,6 @@ class Robot(HierarchicalMachine):
         # Wait for service to set initial params
         rospy.wait_for_service('attention/set_parameters')
         rospy.wait_for_service('animation/set_parameters')
-        print('Wait finished')
         self.clients = {
             'attention': dynamic_reconfigure.client.Client('attention', timeout=0.1),
             'animation': dynamic_reconfigure.client.Client('animation', timeout=0.1),
@@ -123,9 +123,9 @@ class Robot(HierarchicalMachine):
         # ROS publishers
         self.topics = {
             'running_performance': rospy.Publisher('/running_performance', String, queue_size=1),
-            'states_pub': rospy.Publisher("/state", String, queue_size=5),
             'chatbot_speech': rospy.Publisher('/{}/chatbot_speech'.format(self.robot_name), ChatMessage, queue_size=10),
             'soma_pub': rospy.Publisher('/blender_api/set_soma_state', SomaState, queue_size=10),
+            'state_pub': rospy.Publisher('/current_state', String, latch=True),
         }
         # ROS Subscribers
         self.subscribers = {
@@ -137,6 +137,7 @@ class Robot(HierarchicalMachine):
                                                    self.speech_events_cb),
             'chat_events': rospy.Subscriber('/{}/chat_events'.format(self.robot_name), String,
                                               self.chat_events_cb),
+            'state_switch': rospy.Subscriber('/state_switch', String, self.state_callback),
         }
         # ROS Services
         # Wait for all services to become available
@@ -175,6 +176,7 @@ class Robot(HierarchicalMachine):
     # Calls after each state change to apply new configs
     def state_changed(self):
         rospy.set_param('/current_state', self.state)
+        self.topics['state_pub'].publish(String(self.state))
         # State object
         state = self.get_state(self.state)
         print(self.state)
@@ -186,6 +188,20 @@ class Robot(HierarchicalMachine):
         # Aply general behavior for states
         if state.state_config:
             self.state_server.update_configuration(state.state_config)
+
+    def state_callback(self, msg):
+        state = msg.data
+        # Only 3 main switches for now
+        try:
+            if state == 'idle':
+                self.go_idle()
+            elif state =='presenting':
+                self.start_presentation()
+            elif state == 'interacting':
+                self.start_interacting()
+        except Exception as e:
+            logger.error(e)
+
 
     def state_config_callback(self, config, level):
         # Apply properties
@@ -215,7 +231,7 @@ class Robot(HierarchicalMachine):
         try:
             speech = str(msg.utterance).lower()
             # Check if performance is not waiting for same keyword to continue in timeline
-            if self.is_presenting(allow_substates=True) == 'presenting' and self.config['chat_during_performance']:
+            if self.is_presenting(allow_substates=True) and self.config['chat_during_performance']:
                 keywords = rospy.get_param('/performances/keywords_listening', False)
                 # Don't pass the keywords if pause node waits for same keyword (i.e resume performance).
                 if keywords and pause.event_matched(keywords, msg.utterance):
@@ -252,7 +268,7 @@ class Robot(HierarchicalMachine):
             self.finish_talking()
 
     def chat_events_cb(self, msg):
-        if msg.data == 'speech_start':
+        if msg.data == 'speechstart':
             # Speech finished, Robot starts talklign after
             self.speech_start()
 
