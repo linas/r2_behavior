@@ -42,7 +42,7 @@ class Expressions:
                                                            self.config['time_between_expressions_max'])
             try:
                 e = Utils.random(json.loads(self.config['expressions']))
-            except:
+            except Exception as exc:
                 return
             expression = EmotionState()
             expression.name = e['name']
@@ -86,6 +86,8 @@ class Animations:
         self.expressions = None
         self.config = None
         self.animations = Server(AnimationConfig, self.config_callback)
+        self.expresion_pub = rospy.Publisher('/blender_api/set_emotion_state', EmotionState,queue_size=10)
+        self.gesture_pub = rospy.Publisher('/blender_api/set_gesture', SetGesture, queue_size=10)
 
     def config_callback(self, config, level ):
         self.config = config
@@ -102,12 +104,15 @@ class Animations:
     def timer(self):
         if self.init:
             return
-        if self.config.enable_flag:
+        if not self.config.enable_flag:
             return
         # Shows gestures based on timings setr in configs
-        self.expressions.show_expression()
-        self.gestures.show_gesture()
-
+        expression = self.expressions.show_expression()
+        gesture = self.gestures.show_gesture()
+        if expression:
+            self.expresion_pub.publish(expression)
+        if gesture:
+            self.gesture_pub.publish(gesture)
 
 if __name__ == "__main__":
     rospy.init_node("animations")
