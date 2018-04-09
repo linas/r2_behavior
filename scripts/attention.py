@@ -15,6 +15,7 @@ import pprint
 from dynamic_reconfigure.server import Server
 import dynamic_reconfigure.client
 from r2_behavior.cfg import AttentionConfig
+from r2_behavior.msg import APILookAt
 from blender_api_msgs.msg import Target, EmotionState, SetGesture
 from std_msgs.msg import String, Float64, UInt8
 from geometry_msgs.msg import Point
@@ -115,6 +116,7 @@ class Attention:
         # setup face, hand and saliency structures
         self.state = None
         self.current_face_index = -1  # index to current face
+        self.wanted_face_id = 0  # ID for wanted face
         self.current_saliency_index = -1  # index of current saliency vector
         self.current_eye = 0  # current eye (0 = left, 1 = right, 2 = mouth)
         self.interrupted_state = LookAt.IDLE  # which state was interrupted to look at all faces
@@ -160,7 +162,7 @@ class Attention:
         self.lookat = LookAt.IDLE
         self.mirroring = Mirroring.IDLE
         self.gaze = Gaze.GAZE_ONLY
-        # take candidate streams exactly like RealSense Tracker until fusion is better defined and we can rely on combined camera stuff
+
         rospy.Subscriber('/{}/perception/state'.format(self.robot_name), State, self.HandleState)
 
         self.head_focus_pub = rospy.Publisher('/blender_api/set_face_target', Target, queue_size=1)
@@ -171,6 +173,13 @@ class Attention:
         self.setpau_pub = rospy.Publisher('/blender_api/set_pau', pau, queue_size=1)
 
         self.hand_events_pub = rospy.Publisher('/hand_events', String, queue_size=1)
+
+        # API calls (when the overall state is not automatically setting these values via dynamic reconfigure)
+        self.eyecontact_sub = rospy.Subscriber('/behavior/attention/api/eyecontact',UInt8, self.HandleEyeContact)
+        self.lookat_sub = rospy.Subscriber('/behavior/attention/api/lookat',APILookAt, self.HandleLookAt)
+        self.mirroring_sub = rospy.Subscriber('/behavior/attention/api/mirroring',UInt8, self.HandleMirroring)
+        self.gaze_sub = rospy.Subscriber('/behavior/attention/api/gaze',UInt8, self.HandleGaze)
+
         # start dynamic reconfigure server
         self.configs_init = False
         self.config_server = Server(AttentionConfig, self.HandleConfig)
@@ -628,13 +637,63 @@ class Attention:
 
             self.state = data
 
-            # if there is no current face or the current face is out of range, select a new current face (which will automatically deselect if there are no faces)
-            if (self.current_face_index >= len(self.state.faces)) or (self.current_face_index == -1):
+            # if there is a wanted face, try to find it and use that
+            if self.wanted_face_id != 0:
+                index = 0
+                self.current_face_index = -1
+                for face in self.state.faces:
+                    if face.id == self.wanted_face_id:
+                        self.current_face_index = index
+                        break
+                    index += 1
+
+            # otherwise, just make sure current_face_index is valid
+            elif self.current_face_index >= len(self.state.faces):
                 self.SelectNextFace()
 
             # if there is no current saliency or the current saliency is out of range, select a new current saliency
             if (self.current_saliency_index >= len(self.state.arrows)) or (self.current_saliency_index == -1):
                 self.SelectNextSaliency()
+
+
+    def HandleEyeContact(self,data):
+
+        with self.lock:
+
+            self.SetEyeContact(data)
+
+        self.UpdateStateDisplay()
+
+
+    def HandleLookAt(self,data):
+
+        with self.lock:
+
+            if data.mode == LookAt.ONE_FACE: # if client wants to the robot to look at one specific face (even if the face temporarily disappears from the state)
+                self.wanted_face_id = data.id
+            else:
+                self.wanted_face_id = 0
+            self.SetLookAt(self,data.mode)
+
+        self.UpdateStateDisplay()
+
+
+    def HandleMirroring(self,data):
+
+        with self.lock:
+
+            self.SetMirroring(data)
+
+        self.UpdateStateDisplay()
+
+
+    def HandleGaze(self,data):
+
+        with self.lock:
+
+            self.SetGaze(data)
+
+        self.UpdateStateDisplay()
 
 
 if __name__ == "__main__":
