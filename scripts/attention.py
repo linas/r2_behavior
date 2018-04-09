@@ -523,7 +523,6 @@ class Attention:
 
                 self.StepLookAtFace()
 
-
             # have gaze or head follow head or gaze after a while
             if self.gaze_delay_counter > 0 and self.gaze_pos != None:
 
