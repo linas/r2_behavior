@@ -21,6 +21,7 @@ from std_msgs.msg import String, Float64, UInt8
 from geometry_msgs.msg import Point
 from r2_perception.msg import State, StateFace, StateArrow
 from hr_msgs.msg import pau
+from geometry_msgs.msg import Point,PointStamped
 
 
 # in interactive settings with people, the EyeContact machine is used to define specific states for eye contact
@@ -279,43 +280,67 @@ class Attention:
         return config
 
 
-    def SetGazeFocus(self, pos, speed):
-        msg = Target()
-        msg.x = pos.x
-        msg.y = pos.y
-        msg.z = pos.z
-        msg.speed = speed
-        self.gaze_focus_pub.publish(msg)
+    def SetGazeFocus(self, pos, speed, ts):
+
+        ps = PointStamped()
+        ps.header.seq = 0
+        ps.header.stamp = ts
+        ps.header.frame_id = "robot"
+        ps.point.x = pos.x
+        ps.point.y = pos.y
+        ps.point.z = pos.z
+        if self.tf_listener.canTransform("blender", "robot", ts):
+            pst = self.tf_listener.transformPoint("blender", ps)
+            msg = Target()
+            msg.x = pst.point.x
+            msg.y = pst.point.y
+            msg.z = pst.point.z
+            msg.speed = speed
+            self.gaze_focus_pub.publish(msg)
+        else:
+            print("tf from robot to blender did not work")
 
 
-    def SetHeadFocus(self, pos, speed):
-        msg = Target()
-        msg.x = pos.x
-        msg.y = pos.y
-        msg.z = pos.z
-        msg.speed = speed
-        self.head_focus_pub.publish(msg)
+    def SetHeadFocus(self, pos, speed, ts):
+
+        ps = PointStamped()
+        ps.header.seq = 0
+        ps.header.stamp = ts
+        ps.header.frame_id = "robot"
+        ps.point.x = pos.x
+        ps.point.y = pos.y
+        ps.point.z = pos.z
+        if self.tf_listener.canTransform("blender", "robot", ts):
+            pst = self.tf_listener.transformPoint("blender", ps)
+            msg = Target()
+            msg.x = pst.point.x
+            msg.y = pst.point.y
+            msg.z = pst.point.z
+            msg.speed = speed
+            self.head_focus_pub.publish(msg)
+        else:
+            print("tf from robot to blender did not work")
 
 
-    def UpdateGaze(self, pos):
+    def UpdateGaze(self, pos, ts):
 
         self.gaze_pos = pos
 
         if self.gaze == Gaze.GAZE_ONLY:
-            self.SetGazeFocus(pos, 5.0)
+            self.SetGazeFocus(pos, 5.0, ts)
 
         elif self.gaze == Gaze.HEAD_ONLY:
-            self.SetHeadFocus(pos, 3.0)
+            self.SetHeadFocus(pos, 3.0, ts)
 
         elif self.gaze == Gaze.GAZE_AND_HEAD:
-            self.SetGazeFocus(pos, 5.0)
-            self.SetHeadFocus(pos, 3.0)
+            self.SetGazeFocus(pos, 5.0, ts)
+            self.SetHeadFocus(pos, 3.0, ts)
 
         elif self.gaze == Gaze.GAZE_LEADS_HEAD:
-            self.SetGazeFocus(pos, 5.0)
+            self.SetGazeFocus(pos, 5.0, ts)
 
         elif self.gaze == Gaze.HEAD_LEADS_GAZE:
-            self.SetHeadFocus(pos, 3.0)
+            self.SetHeadFocus(pos, 3.0, ts)
 
 
     def SelectNextFace(self):
@@ -353,10 +378,14 @@ class Attention:
         ()
 
 
-    def StepLookAtFace(self):
+    def StepLookAtFace(self, ts):
+
+        print("current face index {}".format(self.current_face_index))
 
         if self.current_face_index == -1:
             return
+
+        print("ID {}".format(self.state.faces[self.current_face_index]))
 
         curface = self.state.faces[self.current_face_index]
         face_pos = curface.position
@@ -383,15 +412,15 @@ class Attention:
 
         if self.eyecontact == EyeContact.IDLE:
             # look at center of the head
-            self.UpdateGaze(face_pos)
+            self.UpdateGaze(face_pos, ts)
 
         elif self.eyecontact == EyeContact.LEFT_EYE:
             # look at left eye
-            self.UpdateGaze(left_eye_pos)
+            self.UpdateGaze(left_eye_pos, ts)
 
         elif self.eyecontact == EyeContact.RIGHT_EYE:
             # look at right eye
-            self.UpdateGaze(right_eye_pos)
+            self.UpdateGaze(right_eye_pos, ts)
 
         elif self.eyecontact == EyeContact.BOTH_EYES:
             # switch between eyes back and forth
@@ -407,7 +436,7 @@ class Attention:
                 cur_eye_pos = left_eye_pos
             else:
                 cur_eye_pos = right_eye_pos
-            self.UpdateGaze(cur_eye_pos)
+            self.UpdateGaze(cur_eye_pos, ts)
 
         elif self.eyecontact == EyeContact.TRIANGLE:
             # cycle between eyes and mouth
@@ -425,7 +454,7 @@ class Attention:
                 cur_eye_pos = right_eye_pos
             elif self.current_eye == 2:
                 cur_eye_pos = mouth_pos
-            self.UpdateGaze(cur_eye_pos)
+            self.UpdateGaze(cur_eye_pos, ts)
 
         # mirroring
         msg = pau()
@@ -501,7 +530,7 @@ class Attention:
                     self.SelectNextSaliency()
                 if self.current_saliency_index != -1:
                     cursaliency = self.state.arrows[self.current_saliency_index]
-                    self.UpdateGaze(cursaliency.direction)
+                    self.UpdateGaze(cursaliency.direction, ts)
 
             elif self.lookat == LookAt.AUDIENCE:
                 self.audience_counter -= 1
@@ -521,7 +550,7 @@ class Attention:
                         self.InitFacesCounter()
                         self.SelectNextFace()
 
-                self.StepLookAtFace()
+                self.StepLookAtFace(ts)
 
             # have gaze or head follow head or gaze after a while
             if self.gaze_delay_counter > 0 and self.gaze_pos != None:
@@ -647,7 +676,7 @@ class Attention:
                     index += 1
 
             # otherwise, just make sure current_face_index is valid
-            elif self.current_face_index >= len(self.state.faces):
+            elif (self.current_face_index >= len(self.state.faces)) or (self.current_face_index == -1):
                 self.SelectNextFace()
 
             # if there is no current saliency or the current saliency is out of range, select a new current saliency

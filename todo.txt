@@ -1,0 +1,6 @@
+@Vytas:
+- /behavior/animation is current animation page, overwritten by state
+- /behavior/attention is current attention page, overwritten by state
+- /behavior/states/current_state_settings is current settings page, overwritten by state
+- These three pages should be named similarly and contain some kind of disclaimer that it's useless to save them
+- Maybe use one combined page per state. For some states that means only *-settings, but for others it's a combination of *-attention, *-animation and *-settings
