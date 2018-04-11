@@ -85,7 +85,7 @@ class Animations:
         self.gestures = None
         self.expressions = None
         self.config = None
-        self.animations = Server(AnimationConfig, self.config_callback)
+        self.animations = Server(AnimationConfig, self.config_callback, namespace='/current/animations')
         self.expresion_pub = rospy.Publisher('/blender_api/set_emotion_state', EmotionState,queue_size=10)
         self.gesture_pub = rospy.Publisher('/blender_api/set_gesture', SetGesture, queue_size=10)
 

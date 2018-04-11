@@ -183,7 +183,7 @@ class Attention:
 
         # start dynamic reconfigure server
         self.configs_init = False
-        self.config_server = Server(AttentionConfig, self.HandleConfig)
+        self.config_server = Server(AttentionConfig, self.HandleConfig, namespace='/current/attention')
 
         # start timer
         self.timer = rospy.Timer(rospy.Duration.from_sec(1.0 / self.synthesizer_rate), self.HandleTimer)

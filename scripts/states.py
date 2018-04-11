@@ -82,11 +82,11 @@ class InteractiveState(NestedState):
         node_name = name if parent is None else "{}_{}".format(parent.name, name)
         if node_name in ATTENTION:
             self.attention_server = Server(AttentionConfig, self.attention_callback,
-                                           namespace="{}_attention".format(node_name))
+                                           namespace="/behavior/{}/attention".format(node_name))
         if node_name in ANIMATIONS:
             self.animation_server = Server(AnimationConfig, self.animations_callback,
-                                         namespace="{}_animation".format(node_name))
-        self.state_server = Server(StateConfig, self.config_callback, namespace='{}_settings'.format(node_name))
+                                         namespace="/behavior/{}/animations".format(node_name))
+        self.state_server = Server(StateConfig, self.config_callback, namespace='/behavior/{}/settings'.format(node_name))
 
     def attention_callback(self, config, level):
         self.attention_config = config
@@ -108,12 +108,8 @@ class Robot(HierarchicalMachine):
 
     def __init__(self):
         # Wait for service to set initial params
-        rospy.wait_for_service('attention/set_parameters')
-        rospy.wait_for_service('animation/set_parameters')
-        self.clients = {
-            'attention': dynamic_reconfigure.client.Client('attention', timeout=0.1),
-            'animation': dynamic_reconfigure.client.Client('animation', timeout=0.1),
-        }
+        rospy.wait_for_service('/current/attention/set_parameters')
+        rospy.wait_for_service('/current/animations/set_parameters')
         # Current state config
         self.state_config = None
         self.config = None
@@ -150,8 +146,8 @@ class Robot(HierarchicalMachine):
         }
         # Configure clients
         self.clients = {
-            'attention': dynamic_reconfigure.client.Client('attention', timeout=0.1),
-            'animation': dynamic_reconfigure.client.Client('animation', timeout=0.1),
+            'attention': dynamic_reconfigure.client.Client('/current/attention', timeout=0.1),
+            'animation': dynamic_reconfigure.client.Client('/current/animations', timeout=0.1),
         }
         # robot properties
         self.props = {
@@ -165,12 +161,13 @@ class Robot(HierarchicalMachine):
         self._before_presentation = ''
         self._current_performance = None
         # State server mostly used for checking current states settings
-        self.state_server = Server(StateConfig, self.state_config_callback, namespace='current_state_settings')
+        self.state_server = Server(StateConfig, self.state_config_callback, namespace='/current/state_settings')
         # Machine starts
         HierarchicalMachine.__init__(self, states=STATES, transitions=TRANSITIONS, initial='idle',
                                           ignore_invalid_triggers=True, after_state_change=self.state_changed)
         # Main param server
-        self.server = Server(StatesConfig, self.config_callback)
+        self.server = Server(StatesConfig, self.config_callback, namespace='/behavior/behavior_settings')
+
         self._listen_timer = None
 
     # Calls after each state change to apply new configs
@@ -245,7 +242,7 @@ class Robot(HierarchicalMachine):
                     performances.remove(a)
                 if performances and self.state != 'analysis':
                     self.services['performance_runner'](random.choice(performances))
-                elif analysis_performances:
+                elif analysis_performances and self.state == 'analysis':
                     self.services['performance_runner'](random.choice(analysis_performances))
 
             # If chat is not enabled for specific state ignore it
