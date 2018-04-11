@@ -382,7 +382,10 @@ class Attention:
     def SelectNextRegion(self):
         # switch to next region point(according to audience ROI)
         try:
-            regions = rospy.get_param("/{}/regions".format(self.robot_name), {})
+            # Check if performance has set regions
+            regions = rospy.get_param("/{}/performance_regions".format(self.robot_name), {})
+            if len(regions) == 0:
+                regions = rospy.get_param("/{}/egions".format(self.robot_name), {})
             point = AttentionRegion.get_point_from_regions(regions, REGIONS[self.attetntion_region])
             return Point(x=point['x'], y=point['y'], z=point['z'])
         except Exception as e:
