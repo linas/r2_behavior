@@ -22,7 +22,8 @@ from geometry_msgs.msg import Point
 from r2_perception.msg import State, StateFace, StateArrow
 from hr_msgs.msg import pau
 from geometry_msgs.msg import Point,PointStamped
-
+# Attention regions
+from performances.nodes import attention as AttentionRegion
 
 # in interactive settings with people, the EyeContact machine is used to define specific states for eye contact
 # this is purely mechanical, so it follows a very strict control logic; the overall state machines controls which
@@ -280,67 +281,68 @@ class Attention:
         return config
 
 
-    def SetGazeFocus(self, pos, speed, ts):
+    def getBlenderPos(self, pos, ts, frame_id):
+        if frame_id == 'blender':
+            return pos
+        else:
+            ps = PointStamped()
+            ps.header.seq = 0
+            ps.header.stamp = ts
+            ps.header.frame_id = frame_id
+            ps.point.x = pos.x
+            ps.point.y = pos.y
+            ps.point.z = pos.z
+            if self.tf_listener.canTransform("blender", frame_id, ts):
+                pst = self.tf_listener.transformPoint("blender", ps)
+                return pst.point
+            else:
+                raise Exception("tf from robot to blender did not work")
 
-        ps = PointStamped()
-        ps.header.seq = 0
-        ps.header.stamp = ts
-        ps.header.frame_id = "robot"
-        ps.point.x = pos.x
-        ps.point.y = pos.y
-        ps.point.z = pos.z
-        if self.tf_listener.canTransform("blender", "robot", ts):
-            pst = self.tf_listener.transformPoint("blender", ps)
+
+    def SetGazeFocus(self, pos, speed, ts, frame_id='robot'):
+        try:
+            pos = self.getBlenderPos(pos, ts, frame_id)
             msg = Target()
-            msg.x = pst.point.x
-            msg.y = pst.point.y
-            msg.z = pst.point.z
+            msg.x = pos.x
+            msg.y = pos.y
+            msg.z = pos.z
             msg.speed = speed
             self.gaze_focus_pub.publish(msg)
-        else:
-            print("tf from robot to blender did not work")
+        except Exception as e:
+            print("Gaze focus exception: {}".format(e))
 
-
-    def SetHeadFocus(self, pos, speed, ts):
-
-        ps = PointStamped()
-        ps.header.seq = 0
-        ps.header.stamp = ts
-        ps.header.frame_id = "robot"
-        ps.point.x = pos.x
-        ps.point.y = pos.y
-        ps.point.z = pos.z
-        if self.tf_listener.canTransform("blender", "robot", ts):
-            pst = self.tf_listener.transformPoint("blender", ps)
+    def SetHeadFocus(self, pos, speed, ts, frame_id='robot'):
+        try:
+            pos = self.getBlenderPos(pos, ts, frame_id)
             msg = Target()
-            msg.x = pst.point.x
-            msg.y = pst.point.y
-            msg.z = pst.point.z
+            msg.x = pos.x
+            msg.y = pos.y
+            msg.z = pos.z
             msg.speed = speed
             self.head_focus_pub.publish(msg)
-        else:
-            print("tf from robot to blender did not work")
+        except Exception as e:
+            print("Head focus exception: {}".format(e))
 
 
-    def UpdateGaze(self, pos, ts):
+    def UpdateGaze(self, pos, ts, frame_id="robot"):
 
         self.gaze_pos = pos
 
         if self.gaze == Gaze.GAZE_ONLY:
-            self.SetGazeFocus(pos, 5.0, ts)
+            self.SetGazeFocus(pos, 5.0, ts, frame_id)
 
         elif self.gaze == Gaze.HEAD_ONLY:
-            self.SetHeadFocus(pos, 3.0, ts)
+            self.SetHeadFocus(pos, 3.0, ts, frame_id)
 
         elif self.gaze == Gaze.GAZE_AND_HEAD:
-            self.SetGazeFocus(pos, 5.0, ts)
-            self.SetHeadFocus(pos, 3.0, ts)
+            self.SetGazeFocus(pos, 5.0, ts, frame_id)
+            self.SetHeadFocus(pos, 3.0, ts, frame_id)
 
         elif self.gaze == Gaze.GAZE_LEADS_HEAD:
-            self.SetGazeFocus(pos, 5.0, ts)
+            self.SetGazeFocus(pos, 5.0, ts, frame_id)
 
         elif self.gaze == Gaze.HEAD_LEADS_GAZE:
-            self.SetHeadFocus(pos, 3.0, ts)
+            self.SetHeadFocus(pos, 3.0, ts, frame_id)
 
 
     def SelectNextFace(self):
@@ -374,8 +376,13 @@ class Attention:
 
 
     def SelectNextAudience(self):
-        # TODO: switch to next audience (according to audience ROI)
-        ()
+        # switch to next audience point(according to audience ROI)
+        try:
+            regions = rospy.get_param("/{}/regions".format(self.robot_name), {})
+            point = AttentionRegion.get_point_from_regions(regions, 'audience')
+            return Point(x=point['x'], y=point['y'], z=point['z'])
+        except Exception as e:
+            print("Could not find new attention point: {}".format(e))
 
 
     def StepLookAtFace(self, ts):
@@ -536,9 +543,9 @@ class Attention:
                 self.audience_counter -= 1
                 if self.audience_counter == 0:
                     self.InitAudienceCounter()
-                    self.SelectNextAudience()
-                    # TODO: self.UpdateGaze()
-
+                    point = self.SelectNextAudience()
+                    # Attention points are calculated in blender frame
+                    self.UpdateGaze(point, ts, frame_id='blender')
             elif self.lookat == LookAt.SPEAKER:
                 ()
                 # TODO: look at the speaker, according to speaker ROI
