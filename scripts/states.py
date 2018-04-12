@@ -61,7 +61,7 @@ TRANSITIONS = [
     ['stop_analysis', 'analysis', 'interacting'],
     ['boring', 'interacting_interested', 'interacting_bored'],
     ['someone_come_in', 'interacting_bored', 'interacting_interested'], # Visual input, robot wakes up
-    ['speech_start', ['interacting_interested', 'interacting_speaking'], 'interacting_listening'],  # If speech detected but not yet transcribed
+    ['speech_start', ['interacting_interested', 'interacting_speaking', 'interacting_listening'], 'interacting_listening'],  # If speech detected but not yet transcribed
     ['speech_finished', ['interacting_bored', 'interacting_interested', 'interacting_listening'],
         'interacting_thinking', 'need_to_think'], # If thinking is needed return true
     ['speech_finished', ['interacting_bored', 'interacting_interested', 'interacting_listening'],
@@ -275,7 +275,6 @@ class Robot(HierarchicalMachine):
 
     def chat_events_cb(self, msg):
         if msg.data == 'speechstart':
-            # Robot heard some words, start listening what someone saying
             self.speech_start()
 
     def tts_mux_cb(self, msg):
@@ -350,19 +349,23 @@ class Robot(HierarchicalMachine):
 
     def on_enter_interacting_listening(self):
         # Listen only for some time
-        self._state_timer = threading.Timer(self.config.listening_time, self.finish_listening).start()
+        self._state_timer = threading.Timer(self.config.listening_time, self.finish_listening)
+        self._state_timer.start()
 
     def on_enter_interacting_thinking(self):
         # If robot doesnt start speaking go back to listening
-        self._state_timer = threading.Timer(self.config.thinking_time, self.could_think_of_anything).start()
+        self._state_timer = threading.Timer(self.config.thinking_time, self.could_think_of_anything)
+        self._state_timer.start()
 
     def on_before_state_change(self):
         # Clean state timer
         if self._state_timer:
             try:
+                print("STOP")
                 self._state_timer.cancel()
                 self._state_timer = False
-            except:
+            except Exception as e:
+                print(e)
                 pass
     @property
     def disable_attention(self):
