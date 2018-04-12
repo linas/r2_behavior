@@ -68,6 +68,9 @@ TRANSITIONS = [
      'interacting_speaking', None,  'need_to_think'],  # Straight answer without thinking (using unless)
     ['finish_talking', 'interacting_speaking', 'interacting_listening'],
     ['finish_listening', 'interacting_listening', 'interacting_interested'],
+    ['start_talking', ['interacting_bored', 'interacting_interested',
+                       'interacting_listening', 'interacting_thinking'], 'interacting_speaking'], # Starts TTS event
+    ['could_think_of_anything', 'interacting_thinking', 'interacting_listening'] # thinking for some time but no response was said
 ]
 
 
@@ -114,6 +117,10 @@ class Robot(HierarchicalMachine):
         self.state_config = None
         self.config = None
         self.starting = True
+        # Current TTS mode: chatbot_responses - auto, web_sresponses - operator
+        self.current_tts_mode = "chatbot_responses"
+        # Controls states_timeouts
+        self._state_timer = None
         # ROS Topics and services
         self.robot_name = rospy.get_param('/robot_name')
         # ROS publishers
@@ -134,6 +141,7 @@ class Robot(HierarchicalMachine):
             'chat_events': rospy.Subscriber('/{}/chat_events'.format(self.robot_name), String,
                                               self.chat_events_cb),
             'state_switch': rospy.Subscriber('/state_switch', String, self.state_callback),
+            'tts_mux': rospy.Subscriber('/{}/tts_mux/selected'.format(self.robot_name), String, self.tts_mux_cb)
         }
         # ROS Services
         # Wait for all services to become available
@@ -164,11 +172,12 @@ class Robot(HierarchicalMachine):
         self.state_server = Server(StateConfig, self.state_config_callback, namespace='/current/state_settings')
         # Machine starts
         HierarchicalMachine.__init__(self, states=STATES, transitions=TRANSITIONS, initial='idle',
-                                          ignore_invalid_triggers=True, after_state_change=self.state_changed)
+                                          ignore_invalid_triggers=True, after_state_change=self.state_changed,
+                                          before_state_change=self.on_before_state_change)
         # Main param server
         self.server = Server(StatesConfig, self.config_callback, namespace='/behavior/behavior_settings')
 
-        self._listen_timer = None
+
 
     # Calls after each state change to apply new configs
     def state_changed(self):
@@ -258,16 +267,19 @@ class Robot(HierarchicalMachine):
 
     def speech_events_cb(self, msg):
         if msg.data == 'start':
-            # Speech finished, Robot starts talklign after
-            self.speech_finished()
+            # Robot starts talking
+            self.start_talking()
         if msg.data == 'stop':
             # Talking finished, robot starts listening
             self.finish_talking()
 
     def chat_events_cb(self, msg):
         if msg.data == 'speechstart':
-            # Speech finished, Robot starts talklign after
+            # Robot heard some words, start listening what someone saying
             self.speech_start()
+
+    def tts_mux_cb(self, msg):
+        self.current_tts_mode = msg.data
 
     def find_performance_by_speech(self, speech):
         """ Finds performances which one of keyword matches"""
@@ -319,7 +331,6 @@ class Robot(HierarchicalMachine):
                     self.timeline_finished()
             else:
                 # New performance loaded
-                print("Starting presentation from {}".format(self.state))
                 self._before_presentation = self.state
                 self.start_presentation()
         except Exception as e:
@@ -334,18 +345,23 @@ class Robot(HierarchicalMachine):
             self.timeline_finished()
 
     def need_to_think(self):
-        # Currently no thinking needed to respond
-        return False
+        # Think in operator control mode (semi automatic or manual)
+        return self.config.thinking_operator and self.current_tts_mode == 'web_responses'
 
     def on_enter_interacting_listening(self):
+        # Listen only for some time
+        self._state_timer = threading.Timer(self.config.listening_time, self.finish_listening).start()
 
-        self._listen_timer = threading.Timer(self.config.listening_time, self.finish_listening).start()
+    def on_enter_interacting_thinking(self):
+        # If robot doesnt start speaking go back to listening
+        self._state_timer = threading.Timer(self.config.thinking_time, self.could_think_of_anything).start()
 
-    def on_exit_interacting_listening(self):
-        if self._listen_timer:
+    def on_before_state_change(self):
+        # Clean state timer
+        if self._state_timer:
             try:
-                self._listen_timer.cancel()
-                self._listen_timer = False
+                self._state_timer.cancel()
+                self._state_timer = False
             except:
                 pass
     @property
