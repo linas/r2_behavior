@@ -363,6 +363,8 @@ class Attention:
     def SelectNextSaliency(self):
 
         # switch to the next (or first) saliency vector
+        if (self.state == None):
+            self.current_saliency_index = -1
         if len(self.state.arrows) == 0:
             # there are no saliency vectors, so select none
             self.current_saliency_index = -1
@@ -387,12 +389,8 @@ class Attention:
 
     def StepLookAtFace(self, ts):
 
-        print("current face index {}".format(self.current_face_index))
-
         if self.current_face_index == -1:
             return
-
-        print("ID {}".format(self.state.faces[self.current_face_index]))
 
         curface = self.state.faces[self.current_face_index]
         face_pos = curface.position
@@ -566,38 +564,36 @@ class Attention:
                 if self.gaze_delay_counter == 0:
 
                     if self.gaze == Gaze.GAZE_LEADS_HEAD:
-                        self.SetHeadFocus(self.gaze_pos, self.gaze_speed)
+                        self.SetHeadFocus(self.gaze_pos, self.gaze_speed,ts)
                         self.gaze_delay_counter = int(self.gaze_delay * self.synthesizer_rate)
 
                     elif self.gaze == Gaze.HEAD_LEADS_GAZE:
-                        self.SetGazeFocus(self.gaze_pos, self.gaze_speed)
+                        self.SetGazeFocus(self.gaze_pos, self.gaze_speed,ts)
                         self.gaze_delay_counter = int(self.gaze_delay * self.synthesizer_rate)
 
             # when speaking, sometimes look at all faces
-            # if self.interrupt_to_all_faces:
-            #
-            #     if self.interrupting:
-            #
-            #         self.all_faces_duration_counter -= 1
-            #         if self.all_faces_duration_counter == 0:
-            #             self.interrupting = False
-            #             self.InitAllFacesDurationCounter()
-            #             self.SetLookAt(self.interrupted_state)
-            #             self.UpdateStateDisplay()
-            #
-            #     else:
-            #
-            #         self.all_faces_start_counter -= 1
-            #         if self.all_faces_start_counter == 0:
-            #             self.interrupting = True
-            #             self.InitAllFacesStartCounter()
-            #             self.interrupted_state = self.lookat
-            #             self.SetLookAt(LookAt.ALL_FACES)
-            #             self.UpdateStateDisplay()
+            if self.interrupt_to_all_faces:
+
+                if self.interrupting:
+                    self.all_faces_duration_counter -= 1
+                    if self.all_faces_duration_counter <= 0:
+                        self.interrupting = False
+                        self.InitAllFacesDurationCounter()
+                        self.SetLookAt(self.interrupted_state)
+                        self.UpdateStateDisplay()
+                else:
+                    self.all_faces_start_counter -= 1
+                    if self.all_faces_start_counter <= 0:
+                        self.interrupting = True
+                        self.InitAllFacesStartCounter()
+                        self.interrupted_state = self.lookat
+                        self.SetLookAt(LookAt.ALL_FACES)
+                        self.UpdateStateDisplay()
 
 
     def SetEyeContact(self, neweyecontact):
 
+        print("SetEyeContact {}".format(neweyecontact))
         if neweyecontact == self.eyecontact:
             return
 
@@ -609,6 +605,7 @@ class Attention:
 
     def SetLookAt(self, newlookat):
 
+        print("SetLookAt {}".format(newlookat))
         if newlookat == self.lookat:
             return
 
@@ -644,6 +641,7 @@ class Attention:
 
     def SetMirroring(self, newmirroring):
 
+        print("SetMirroring {}".format(newmirroring))
         if newmirroring == self.mirroring:
             return
 
@@ -657,6 +655,7 @@ class Attention:
 
     def SetGaze(self, newgaze):
 
+        print("SetGaze {}".format(newgaze))
         if newgaze == self.gaze:
             return
 
@@ -685,6 +684,7 @@ class Attention:
             # otherwise, just make sure current_face_index is valid
             elif (self.current_face_index >= len(self.state.faces)) or (self.current_face_index == -1):
                 self.SelectNextFace()
+            # TODO: it's better to have the robot look at the same ID, regardless of which index in the stateface list
 
             # if there is no current saliency or the current saliency is out of range, select a new current saliency
             if (self.current_saliency_index >= len(self.state.arrows)) or (self.current_saliency_index == -1):
