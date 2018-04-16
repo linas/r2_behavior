@@ -45,9 +45,7 @@ class LookAt:
     SALIENCY = 2  # look at saliency and switch
     ONE_FACE = 3  # look at single face and make eye contact
     ALL_FACES = 4  # look at all faces, make eye contact and switch
-    AUDIENCE = 5  # look at the audience and switch
-    SPEAKER = 6  # look at the speaker
-
+    REGION = 5  # look at the region and switch
 
 # params: current face
 
@@ -79,7 +77,11 @@ class Gaze:
 
 
 # params: gaze delay, gaze speed
-
+REGIONS = {
+    0: 'audience',  # Audience region selected
+    1: 'main',  # Presenter (speaker) region
+    2: 'specific'   # Co-presenter or some other region for specific setting
+}
 
 # awareness: saliency, hands, faces, motion sensors
 
@@ -96,9 +98,9 @@ class Attention:
         self.eyes_counter = random.randint(int(self.eyes_time_min * self.synthesizer_rate),
                                            int(self.eyes_time_max * self.synthesizer_rate))
 
-    def InitAudienceCounter(self):
-        self.audience_counter = random.randint(int(self.audience_time_min * self.synthesizer_rate),
-                                               int(self.audience_time_max * self.synthesizer_rate))
+    def InitRegionCounter(self):
+        self.region_counter = random.randint(int(self.region_time_min * self.synthesizer_rate),
+                                             int(self.region_time_max * self.synthesizer_rate))
 
     def InitAllFacesStartCounter(self):
         self.all_faces_start_counter = random.randint(int(self.all_faces_start_time_min * self.synthesizer_rate),
@@ -140,8 +142,8 @@ class Attention:
         self.faces_time_max = 3.0
         self.eyes_time_min = 0.1
         self.eyes_time_max = 3.0
-        self.audience_time_min = 0.1
-        self.audience_time_max = 3.0
+        self.region_time_min = 0.1
+        self.region_time_max = 3.0
         self.gesture_time_min = 0.1
         self.gesture_time_max = 3.0
         self.expression_time_min = 0.1
@@ -149,7 +151,7 @@ class Attention:
         self.InitSaliencyCounter()
         self.InitFacesCounter()
         self.InitEyesCounter()
-        self.InitAudienceCounter()
+        self.InitRegionCounter()
         self.face_state_decay = 2.0
         self.gaze_delay = 1.0
         self.gaze_speed = 0.5
@@ -164,7 +166,8 @@ class Attention:
         self.lookat = LookAt.IDLE
         self.mirroring = Mirroring.IDLE
         self.gaze = Gaze.GAZE_ONLY
-
+        self.attetntion_region = 0
+        self.head_speed = 1
         rospy.Subscriber('/{}/perception/state'.format(self.robot_name), State, self.HandleState)
 
         self.head_focus_pub = rospy.Publisher('/blender_api/set_face_target', Target, queue_size=1)
@@ -208,7 +211,8 @@ class Attention:
 
             # keep time
             self.keep_time = config.keep_time
-
+            self.attetntion_region = config.attention_region
+            self.head_speed = config.head_speed
             # update the counter ranges (and counters if the ranges changed)
             if config.saliency_time_max < config.saliency_time_min:
                 config.saliency_time_max = config.saliency_time_min
@@ -231,12 +235,12 @@ class Attention:
                 self.eyes_time_max = config.eyes_time_max
                 self.InitEyesCounter()
 
-            if config.audience_time_max < config.audience_time_min:
-                config.audience_time_max = config.audience_time_min
-            if config.audience_time_min != self.audience_time_min or config.audience_time_max != self.audience_time_max:
-                self.audience_time_min = config.audience_time_min
-                self.audience_time_max = config.audience_time_max
-                self.InitAudienceCounter()
+            if config.region_time_max < config.region_time_min:
+                config.region_time_max = config.region_time_min
+            if config.region_time_min != self.region_time_min or config.region_time_max != self.region_time_max:
+                self.region_time_min = config.region_time_min
+                self.region_time_max = config.region_time_max
+                self.InitRegionCounter()
 
             self.face_state_decay = config.face_state_decay
 
@@ -273,7 +277,7 @@ class Attention:
             self.InitSaliencyCounter()
             self.InitFacesCounter()
             self.InitEyesCounter()
-            self.InitAudienceCounter()
+            self.InitRegionCounter()
             self.InitAllFacesStartCounter()
             self.InitAllFacesDurationCounter()
 
@@ -332,17 +336,17 @@ class Attention:
             self.SetGazeFocus(pos, 5.0, ts, frame_id)
 
         elif self.gaze == Gaze.HEAD_ONLY:
-            self.SetHeadFocus(pos, 3.0, ts, frame_id)
+            self.SetHeadFocus(pos, self.head_speed, ts, frame_id)
 
         elif self.gaze == Gaze.GAZE_AND_HEAD:
             self.SetGazeFocus(pos, 5.0, ts, frame_id)
-            self.SetHeadFocus(pos, 3.0, ts, frame_id)
+            self.SetHeadFocus(pos, self.head_speed, ts, frame_id)
 
         elif self.gaze == Gaze.GAZE_LEADS_HEAD:
             self.SetGazeFocus(pos, 5.0, ts, frame_id)
 
         elif self.gaze == Gaze.HEAD_LEADS_GAZE:
-            self.SetHeadFocus(pos, 3.0, ts, frame_id)
+            self.SetHeadFocus(pos, self.head_speed, ts, frame_id)
 
 
     def SelectNextFace(self):
@@ -377,11 +381,14 @@ class Attention:
                 self.current_saliency_index = 0
 
 
-    def SelectNextAudience(self):
-        # switch to next audience point(according to audience ROI)
+    def SelectNextRegion(self):
+        # switch to next region point(according to audience ROI)
         try:
-            regions = rospy.get_param("/{}/regions".format(self.robot_name), {})
-            point = AttentionRegion.get_point_from_regions(regions, 'audience')
+            # Check if performance has set regions
+            regions = rospy.get_param("/{}/performance_regions".format(self.robot_name), {})
+            if len(regions) == 0:
+                regions = rospy.get_param("/{}/egions".format(self.robot_name), {})
+            point = AttentionRegion.get_point_from_regions(regions, REGIONS[self.attetntion_region])
             return Point(x=point['x'], y=point['y'], z=point['z'])
         except Exception as e:
             print("Could not find new attention point: {}".format(e))
@@ -537,16 +544,14 @@ class Attention:
                     cursaliency = self.state.arrows[self.current_saliency_index]
                     self.UpdateGaze(cursaliency.direction, ts)
 
-            elif self.lookat == LookAt.AUDIENCE:
-                self.audience_counter -= 1
-                if self.audience_counter == 0:
-                    self.InitAudienceCounter()
-                    point = self.SelectNextAudience()
+            elif self.lookat == LookAt.REGION:
+                self.region_counter -= 1
+                if self.region_counter == 0:
+                    self.InitRegionCounter()
+                    point = self.SelectNextRegion()
                     # Attention points are calculated in blender frame
                     self.UpdateGaze(point, ts, frame_id='blender')
-            elif self.lookat == LookAt.SPEAKER:
-                ()
-                # TODO: look at the speaker, according to speaker ROI
+
 
             else:
                 if self.lookat == LookAt.ALL_FACES:
@@ -621,8 +626,8 @@ class Attention:
             self.InitFacesCounter()
             self.InitEyesCounter()
 
-        elif self.lookat == LookAt.AUDIENCE:
-            self.InitAudienceCounter()
+        elif self.lookat == LookAt.REGION:
+            self.InitRegionCounter()
 
 
     def StartPauMode(self):
@@ -706,6 +711,8 @@ class Attention:
 
             if data.mode == LookAt.ONE_FACE: # if client wants to the robot to look at one specific face (even if the face temporarily disappears from the state)
                 self.wanted_face_id = data.id
+            elif data.mode == LookAt.REGION:
+                self.attetntion_region = data.id
             else:
                 self.wanted_face_id = 0
             self.SetLookAt(self,data.mode)
