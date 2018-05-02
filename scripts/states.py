@@ -61,12 +61,12 @@ TRANSITIONS = [
     ['stop_analysis', 'analysis', 'interacting'],
     ['boring', 'interacting_interested', 'interacting_bored'],
     ['someone_come_in', 'interacting_bored', 'interacting_interested'], # Visual input, robot wakes up
-    ['speech_start', ['interacting_interested', 'interacting_speaking', 'interacting_listening'], 'interacting_listening'],  # If speech detected but not yet transcribed
+    ['speech_start', ['interacting_interested', 'interacting_speaking'], 'interacting_listening'],  # If speech detected but not yet transcribed
     ['speech_finished', ['interacting_bored', 'interacting_interested', 'interacting_listening'],
         'interacting_thinking', 'need_to_think'], # If thinking is needed return true
     ['speech_finished', ['interacting_bored', 'interacting_interested', 'interacting_listening'],
      'interacting_speaking', None,  'need_to_think'],  # Straight answer without thinking (using unless)
-    ['finish_talking', 'interacting_speaking', 'interacting_listening'],
+    ['finish_talking', 'interacting_speaking', 'interacting_interested'], # After she finish talking
     ['finish_listening', 'interacting_listening', 'interacting_interested'],
     ['start_talking', ['interacting_bored', 'interacting_interested',
                        'interacting_listening', 'interacting_thinking'], 'interacting_speaking'], # Starts TTS event

@@ -19,7 +19,7 @@ from r2_behavior.msg import APILookAt
 from blender_api_msgs.msg import Target, EmotionState, SetGesture
 from std_msgs.msg import String, Float64, UInt8
 from geometry_msgs.msg import Point
-from r2_perception.msg import State, StateFace, StateArrow
+from r2_perception.msg import State, Face, SalientPoint
 from hr_msgs.msg import pau
 from geometry_msgs.msg import Point,PointStamped
 # Attention regions
@@ -364,12 +364,12 @@ class Attention:
                 self.current_face_index = 0
 
 
-    def SelectNextSaliency(self):
+    def SelectNextSalientPoint(self):
 
         # switch to the next (or first) saliency vector
         if (self.state == None):
             self.current_saliency_index = -1
-        if len(self.state.arrows) == 0:
+        if len(self.state.salientpoints) == 0:
             # there are no saliency vectors, so select none
             self.current_saliency_index = -1
             return
@@ -377,7 +377,7 @@ class Attention:
             self.current_saliency_index = 0
         else:
             self.current_saliency_index += 1
-            if self.current_saliency_index >= len(self.state.arrows):
+            if self.current_saliency_index >= len(self.state.salientpoints):
                 self.current_saliency_index = 0
 
 
@@ -539,10 +539,10 @@ class Attention:
                 self.saliency_counter -= 1
                 if self.saliency_counter == 0:
                     self.InitSaliencyCounter()
-                    self.SelectNextSaliency()
+                    self.SelectNextSalientPoint()
                 if self.current_saliency_index != -1:
-                    cursaliency = self.state.arrows[self.current_saliency_index]
-                    self.UpdateGaze(cursaliency.direction, ts)
+                    cursaliency = self.state.salientpoints[self.current_saliency_index]
+                    self.UpdateGaze(cursaliency.position, ts)
 
             elif self.lookat == LookAt.REGION:
                 self.region_counter -= 1
@@ -692,7 +692,7 @@ class Attention:
             # TODO: it's better to have the robot look at the same ID, regardless of which index in the stateface list
 
             # if there is no current saliency or the current saliency is out of range, select a new current saliency
-            if (self.current_saliency_index >= len(self.state.arrows)) or (self.current_saliency_index == -1):
+            if (self.current_saliency_index >= len(self.state.salientpoints)) or (self.current_saliency_index == -1):
                 self.SelectNextSaliency()
 
 
@@ -712,7 +712,7 @@ class Attention:
             if data.mode == LookAt.ONE_FACE: # if client wants to the robot to look at one specific face (even if the face temporarily disappears from the state)
                 self.wanted_face_id = data.id
             elif data.mode == LookAt.REGION:
-                self.attetntion_region = data.id
+                self.attention_region = data.id
             else:
                 self.wanted_face_id = 0
             self.SetLookAt(self,data.mode)
