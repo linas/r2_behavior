@@ -8,6 +8,7 @@ import rospy
 import os
 import re
 import random
+import yaml
 from std_msgs.msg import String, Bool, Float32
 from blender_api_msgs.msg import Target, SomaState
 from blender_api_msgs.srv import SetParam
@@ -21,6 +22,7 @@ from hr_msgs.msg import ChatMessage
 from dynamic_reconfigure.server import Server
 from performances.nodes import pause
 from r2_behavior.cfg import AttentionConfig, AnimationConfig, StatesConfig, StateConfig
+from r2_perception.msg import State
 
 logger = logging.getLogger('hr.behavior')
 
@@ -176,8 +178,62 @@ class Robot(HierarchicalMachine):
                                           before_state_change=self.on_before_state_change)
         # Main param server
         self.server = Server(StatesConfig, self.config_callback, namespace='/behavior/behavior_settings')
+        self.faces_db_file = None
+        self.known_faces = {}
+        self.faces_last_update = time.time()
+        # Faces last seen database:
+        try:
+            assemblies = rospy.get_param('/assemblies')
+            assembly = assemblies[0] if self.robot_name in assemblies[0] else assemblies[1]
+            self.faces_db_file = os.path.join(assembly,'known_faces.yaml')
+            with open(self.faces_db_file, 'r') as stream:
+                try:
+                    self.known_faces = yaml.load(stream)
+                except yaml.YAMLError as exc:
+                    print(exc)
+        except:
+            logger.error("Cant load the known faces")
+        rospy.Subscriber('/{}/perception/state'.format(self.robot_name), State, self.perception_state_cb)
 
+    def perception_state_cb(self, msg):
+        # Ignore perception while no interacting
+        if not self.is_iteracting_interested(allow_substates=True):
+            return
+        if len(msg.faces) > 0:
+            for f in msg.faces:
+                if f.first_name is not "":
+                    name = f.first_name
+                    # repeating face, enroll but don't play any timeline
+                    if name not in self.known_faces.keys():
+                        self.known_faces[name] = {'last_seen': time.time()}
+                        self.sync_faces()
+                    else:
+                        last_seen = self.known_faces[name]['last_seen']
+                        current_time = time.time()
+                        self.self.known_faces[name]['last_seen'] = current_time
+                        # Update every 10s
+                        if self.faces_last_update + 10 < time.time():
+                            self.sync_faces()
+                        if current_time - last_seen > 60*60*24:
+                            performance_kwd = 'faceid_{}_{}'.format('long',name)
+                            performances = self.find_performance_by_speech(performance_kwd)
+                            if len(performances) > 0:
+                                self.services['performance_runner'](random.choice(performances))
+                                return
+                        if current_time - last_seen > 60 *15:
+                            performance_kwd = 'faceid_{}_{}'.format('short', name)
+                            performances = self.find_performance_by_speech(performance_kwd)
+                            if len(performances) > 0:
+                                self.services['performance_runner'](random.choice(performances))
+                                return
 
+    def sync_faces(self):
+        try:
+            self.faces_last_update = time.time()
+            with open(self.faces_db_file, 'w') as outfile:
+                yaml.dump(self.known_faces, outfile, default_flow_style=False)
+        except:
+            pass
 
     # Calls after each state change to apply new configs
     def state_changed(self):
@@ -190,7 +246,6 @@ class Robot(HierarchicalMachine):
             self.clients['attention'].update_configuration(state.attention_config)
         if state.animations_config:
             self.clients['animation'].update_configuration(state.animations_config)
-        # Ap
         # Aply general behavior for states
         if state.state_config:
             self.state_server.update_configuration(state.state_config)
@@ -251,8 +306,10 @@ class Robot(HierarchicalMachine):
                     performances.remove(a)
                 if performances and self.state != 'analysis':
                     self.services['performance_runner'](random.choice(performances))
+                    return
                 elif analysis_performances and self.state == 'analysis':
                     self.services['performance_runner'](random.choice(analysis_performances))
+                    return
 
             # If chat is not enabled for specific state ignore it
             if not self.state_config.chat_enabled:
