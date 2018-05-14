@@ -191,13 +191,13 @@ class Robot(HierarchicalMachine):
                     self.known_faces = yaml.load(stream)
                 except yaml.YAMLError as exc:
                     print(exc)
-        except:
-            logger.error("Cant load the known faces")
+        except Exception as e:
+            logger.error("Cant load the known faces {}".format(e))
         rospy.Subscriber('/{}/perception/state'.format(self.robot_name), State, self.perception_state_cb)
 
     def perception_state_cb(self, msg):
         # Ignore perception while no interacting
-        if not self.is_iteracting_interested(allow_substates=True):
+        if not self.state == 'interacting_interested':
             return
         if len(msg.faces) > 0:
             for f in msg.faces:
@@ -209,8 +209,9 @@ class Robot(HierarchicalMachine):
                         self.sync_faces()
                     else:
                         last_seen = self.known_faces[name]['last_seen']
+                        rospy.set_param('/last_known_face', name)
                         current_time = time.time()
-                        self.self.known_faces[name]['last_seen'] = current_time
+                        self.known_faces[name]['last_seen'] = current_time
                         # Update every 10s
                         if self.faces_last_update + 10 < time.time():
                             self.sync_faces()
@@ -226,6 +227,19 @@ class Robot(HierarchicalMachine):
                             if len(performances) > 0:
                                 self.services['performance_runner'](random.choice(performances))
                                 return
+                        if current_time - last_seen > 60*60*24:
+                            performance_kwd = 'faceid_{}_unknown'.format('long',name)
+                            performances = self.find_performance_by_speech(performance_kwd)
+                            if len(performances) > 0:
+                                self.services['performance_runner'](random.choice(performances))
+                                return
+                        if current_time - last_seen > 60 *15:
+                            performance_kwd = 'faceid_{}_unknown'.format('short', name)
+                            performances = self.find_performance_by_speech(performance_kwd)
+                            if len(performances) > 0:
+                                self.services['performance_runner'](random.choice(performances))
+                                return
+
 
     def sync_faces(self):
         try:
