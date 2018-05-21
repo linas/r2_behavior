@@ -414,6 +414,9 @@ class Robot(HierarchicalMachine):
         else:
             self.timeline_finished()
 
+    def timeline_finished(self):
+        pass
+
     def need_to_think(self):
         # Think in operator control mode (semi automatic or manual)
         return self.config.thinking_operator and self.current_tts_mode == 'web_responses'
@@ -447,7 +450,7 @@ class Robot(HierarchicalMachine):
         if self.props['disable_attention'] != val:
             self.props['disable_attention'] = val
             try:
-                self.clients['attention'].update_configuration({'enable_flag': val})
+                self.clients['attention'].update_configuration({'enable_flag': not val})
             except Exception as e:
                 logger.errot(e)
 
@@ -460,7 +463,8 @@ class Robot(HierarchicalMachine):
         if self.props['disable_animations'] != val:
             self.props['disable_animations'] = val
             try:
-                self.clients['animation'].update_configuration({'enable_flag': val})
+                print("Aniamtions disabled: {}".format(val))
+                self.clients['animation'].update_configuration({'enable_flag': not val})
             except Exception as e:
                 logger.error(e)
     @property
