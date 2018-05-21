@@ -45,7 +45,7 @@ STATES = [
 # Otional state params:
 # States to serve separate attention settings
 ATTENTION = ['interacting_bored', 'interacting_interested', 'interacting_listening', 'interacting_speaking',
-             'interacting_thinking', 'presenting_waiting']
+             'interacting_thinking', 'presenting_waiting', 'presenting_performing']
 # States to serve separate animation settings
 ANIMATIONS = ATTENTION
 
