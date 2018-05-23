@@ -46,6 +46,8 @@ class LookAt:
     ONE_FACE = 3  # look at single face and make eye contact
     ALL_FACES = 4  # look at all faces, make eye contact and switch
     REGION = 5  # look at the region and switch
+    HOLD = 6 # Do not move the head while in  this state
+
 
 # params: current face
 
@@ -397,7 +399,8 @@ class Attention:
     def StepLookAtFace(self, ts):
 
         if self.current_face_index == -1:
-            return
+            raise Exception("No face available")
+
 
         curface = self.state.faces[self.current_face_index]
         face_pos = curface.position
@@ -524,10 +527,13 @@ class Attention:
 
             # this is the heart of the synthesizer, here the lookat and eyecontact state machines take care of where the robot is looking, and random expressions and gestures are triggered to look more alive (like RealSense Tracker)
             ts = data.current_expected
-
+            #If nowhere to look, straighten the head
+            idle_point = Point(x = 1, y=0, z=0)
             # ==== handle lookat
             if self.lookat == LookAt.IDLE:
                 # no specific target, let Blender do it's soma cycle thing
+                # Reset to look ahead to prevent weird
+                self.UpdateGaze(idle_point,ts, frame_id='blender')
                 ()
 
             elif self.lookat == LookAt.AVOID:
@@ -535,11 +541,21 @@ class Attention:
                 # TODO: head_focus_pub
                 ()
 
+            elif self.lookat == LookAt.HOLD:
+                # Do nothing
+                ()
+
             elif self.lookat == LookAt.SALIENCY:
                 self.saliency_counter -= 1
                 if self.saliency_counter == 0:
-                    self.InitSaliencyCounter()
                     self.SelectNextSalientPoint()
+                    # Reset head position if nothing happens
+                    if self.current_saliency_index == -1:
+                        self.UpdateGaze(idle_point, ts, frame_id='blender')
+                    else:
+                        # Init counter only if any salient point found
+                        self.InitSaliencyCounter()
+
                 if self.current_saliency_index != -1:
                     cursaliency = self.state.salientpoints[self.current_saliency_index]
                     self.UpdateGaze(cursaliency.position, ts)
@@ -548,10 +564,10 @@ class Attention:
                 self.region_counter -= 1
                 if self.region_counter == 0:
                     self.InitRegionCounter()
+                    # SelectNextRegion returns idle point if no region set
                     point = self.SelectNextRegion()
                     # Attention points are calculated in blender frame
                     self.UpdateGaze(point, ts, frame_id='blender')
-
 
             else:
                 if self.lookat == LookAt.ALL_FACES:
@@ -559,8 +575,11 @@ class Attention:
                     if self.faces_counter == 0:
                         self.InitFacesCounter()
                         self.SelectNextFace()
+                try:
+                    self.StepLookAtFace(ts)
+                except:
+                    self.UpdateGaze(idle_point, ts, frame_id='blender')
 
-                self.StepLookAtFace(ts)
 
             # have gaze or head follow head or gaze after a while
             if self.gaze_delay_counter > 0 and self.gaze_pos != None:
