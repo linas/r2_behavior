@@ -306,7 +306,7 @@ class Robot(HierarchicalMachine):
         try:
             speech = str(msg.utterance).lower()
             # Check if performance is not waiting for same keyword to continue in timeline
-            if self.is_presenting(allow_substates=True) and self.config['chat_during_performance']:
+            if self.is_presenting(allow_substates=True):
                 keywords = rospy.get_param('/performances/keywords_listening', False)
                 # Don't pass the keywords if pause node waits for same keyword (i.e resume performance).
                 if keywords and pause.event_matched(keywords, msg.utterance):
