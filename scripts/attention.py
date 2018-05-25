@@ -24,6 +24,9 @@ from hr_msgs.msg import pau
 from geometry_msgs.msg import Point,PointStamped
 # Attention regions
 from performances.nodes import attention as AttentionRegion
+import logging
+
+logger = logging.getLogger('hr.r2_behavior.attention')
 
 # in interactive settings with people, the EyeContact machine is used to define specific states for eye contact
 # this is purely mechanical, so it follows a very strict control logic; the overall state machines controls which
@@ -315,7 +318,7 @@ class Attention:
             msg.speed = speed
             self.gaze_focus_pub.publish(msg)
         except Exception as e:
-            print("Gaze focus exception: {}".format(e))
+            logger.warn("Gaze focus exception: {}".format(e))
 
     def SetHeadFocus(self, pos, speed, ts, frame_id='robot'):
         try:
@@ -327,7 +330,7 @@ class Attention:
             msg.speed = speed
             self.head_focus_pub.publish(msg)
         except Exception as e:
-            print("Head focus exception: {}".format(e))
+            logger.warn("Head focus exception: {}".format(e))
 
 
     def UpdateGaze(self, pos, ts, frame_id="robot"):
@@ -393,7 +396,7 @@ class Attention:
             point = AttentionRegion.get_point_from_regions(regions, REGIONS[self.attetntion_region])
             return Point(x=point['x'], y=point['y'], z=point['z'])
         except Exception as e:
-            print("Could not find new attention point: {}".format(e))
+            logger.warn("Could not find new attention point: {}".format(e))
 
 
     def StepLookAtFace(self, ts):
@@ -617,7 +620,7 @@ class Attention:
 
     def SetEyeContact(self, neweyecontact):
 
-        print("SetEyeContact {}".format(neweyecontact))
+        logger.warn("SetEyeContact {}".format(neweyecontact))
         if neweyecontact == self.eyecontact:
             return
 
@@ -629,7 +632,7 @@ class Attention:
 
     def SetLookAt(self, newlookat):
 
-        print("SetLookAt {}".format(newlookat))
+        logger.warn("SetLookAt {}".format(newlookat))
         if newlookat == self.lookat:
             return
 
@@ -665,7 +668,7 @@ class Attention:
 
     def SetMirroring(self, newmirroring):
 
-        print("SetMirroring {}".format(newmirroring))
+        logger.warn("SetMirroring {}".format(newmirroring))
         if newmirroring == self.mirroring:
             return
 
@@ -679,7 +682,7 @@ class Attention:
 
     def SetGaze(self, newgaze):
 
-        print("SetGaze {}".format(newgaze))
+        logger.warn("SetGaze {}".format(newgaze))
         if newgaze == self.gaze:
             return
 

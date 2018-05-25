@@ -24,7 +24,7 @@ from performances.nodes import pause
 from r2_behavior.cfg import AttentionConfig, AnimationConfig, StatesConfig, StateConfig
 from r2_perception.msg import State
 
-logger = logging.getLogger('hr.behavior')
+logger = logging.getLogger('hr.behavior.states')
 
 # High level hierarchical state machine
 STATES = [
@@ -190,7 +190,7 @@ class Robot(HierarchicalMachine):
                 try:
                     self.known_faces = yaml.load(stream)
                 except yaml.YAMLError as exc:
-                    print(exc)
+                    logger.warn(exc)
         except Exception as e:
             logger.error("Cant load the known faces {}".format(e))
         rospy.Subscriber('/{}/perception/state'.format(self.robot_name), State, self.perception_state_cb)
@@ -255,7 +255,7 @@ class Robot(HierarchicalMachine):
         self.topics['state_pub'].publish(String(self.state))
         # State object
         state = self.get_state(self.state)
-        print(self.state)
+        logger.warn(self.state)
         if state.attention_config:
             self.clients['attention'].update_configuration(state.attention_config)
         if state.animations_config:
@@ -435,11 +435,11 @@ class Robot(HierarchicalMachine):
         # Clean state timer
         if self._state_timer:
             try:
-                print("STOP")
+                logger.warn("STOP")
                 self._state_timer.cancel()
                 self._state_timer = False
             except Exception as e:
-                print(e)
+                logger.warn(e)
                 pass
     @property
     def disable_attention(self):
@@ -463,7 +463,7 @@ class Robot(HierarchicalMachine):
         if self.props['disable_animations'] != val:
             self.props['disable_animations'] = val
             try:
-                print("Aniamtions disabled: {}".format(val))
+                logger.warn("Aniamtions disabled: {}".format(val))
                 self.clients['animation'].update_configuration({'enable_flag': not val})
             except Exception as e:
                 logger.error(e)
