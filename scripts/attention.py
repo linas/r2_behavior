@@ -17,7 +17,7 @@ import dynamic_reconfigure.client
 from r2_behavior.cfg import AttentionConfig
 from r2_behavior.msg import APILookAt
 from blender_api_msgs.msg import Target, EmotionState, SetGesture
-from std_msgs.msg import String, Float64, UInt8
+from std_msgs.msg import String, Float64, UInt8, Int64
 from geometry_msgs.msg import Point
 from r2_perception.msg import State, Face, SalientPoint
 from hr_msgs.msg import pau
@@ -49,7 +49,7 @@ class LookAt:
     ONE_FACE = 3  # look at single face and make eye contact
     ALL_FACES = 4  # look at all faces, make eye contact and switch
     REGION = 5  # look at the region and switch
-    HOLD = 6 # Do not move the head while in  this state
+    HOLD = 6 # Do not move the head while in this state
 
 
 # params: current face
@@ -115,13 +115,22 @@ class Attention:
         self.all_faces_duration_counter = random.randint(int(self.all_faces_duration_min * self.synthesizer_rate),
                                                          int(self.all_faces_duration_max * self.synthesizer_rate))
 
+    def __getattr__(self, item):
+        # Allow configuration attributes to be accessed directly
+        if self.config is None:
+            raise AttributeError
+        return self.config.__getattr__(item)
+
     def __init__(self):
 
         # create lock
         self.lock = threading.Lock()
 
         self.robot_name = rospy.get_param("/robot_name")
-
+        self.eyecontact = 0
+        self.lookat = 0
+        self.mirroring = 0
+        self.gaze = 0
         # setup face, hand and saliency structures
         self.state = None
         self.current_face_index = -1  # index to current face
@@ -136,43 +145,8 @@ class Attention:
 
         self.tf_listener = tf.TransformListener(False, rospy.Duration.from_sec(1))
 
-        # setup dynamic reconfigure parameters
-        # TODO remove should be initialized with initial ser
-        self.enable_flag = True
-        self.synthesizer_rate = 10.0
-        self.keep_time = 1.0
-        self.saliency_time_min = 0.1
-        self.saliency_time_max = 3.0
-        self.faces_time_min = 0.1
-        self.faces_time_max = 3.0
-        self.eyes_time_min = 0.1
-        self.eyes_time_max = 3.0
-        self.region_time_min = 0.1
-        self.region_time_max = 3.0
-        self.gesture_time_min = 0.1
-        self.gesture_time_max = 3.0
-        self.expression_time_min = 0.1
-        self.expression_time_max = 3.0
-        self.InitSaliencyCounter()
-        self.InitFacesCounter()
-        self.InitEyesCounter()
-        self.InitRegionCounter()
-        self.face_state_decay = 2.0
-        self.gaze_delay = 1.0
-        self.gaze_speed = 0.5
-        self.interrupt_to_all_faces = False
-        self.all_faces_start_time_min = 4.0
-        self.all_faces_start_time_max = 6.0
-        self.all_faces_duration_min = 2.0
-        self.all_faces_duration_max = 4.0
-        self.InitAllFacesStartCounter()
-        self.InitAllFacesDurationCounter()
-        self.eyecontact = EyeContact.IDLE
-        self.lookat = LookAt.IDLE
-        self.mirroring = Mirroring.IDLE
-        self.gaze = Gaze.GAZE_ONLY
-        self.attetntion_region = 0
-        self.head_speed = 1
+        # tracks last face by fsdk_id, if changes informs eye tracking to pause
+        self.last_face = -2
         rospy.Subscriber('/{}/perception/state'.format(self.robot_name), State, self.HandleState)
 
         self.head_focus_pub = rospy.Publisher('/blender_api/set_face_target', Target, queue_size=1)
@@ -181,8 +155,19 @@ class Attention:
         self.gestures_pub = rospy.Publisher('/blender_api/set_gesture', SetGesture, queue_size=1)
         self.animationmode_pub = rospy.Publisher('/blender_api/set_animation_mode', UInt8, queue_size=1)
         self.setpau_pub = rospy.Publisher('/blender_api/set_pau', pau, queue_size=1)
+        self.current_face_pub = rospy.Publisher('/behavior/current_face', Int64, queue_size=5, latch=True)
+
+        self.old_synthesizer_rate  = 30
 
         self.hand_events_pub = rospy.Publisher('/hand_events', String, queue_size=1)
+
+        # Timer, started by config server
+        self.timer = None
+
+        # start dynamic reconfigure server
+        self.configs_init = False
+        self.config_server = Server(AttentionConfig, self.HandleConfig, namespace='/current/attention')
+
 
         # API calls (when the overall state is not automatically setting these values via dynamic reconfigure)
         self.eyecontact_sub = rospy.Subscriber('/behavior/attention/api/eyecontact',UInt8, self.HandleEyeContact)
@@ -190,13 +175,10 @@ class Attention:
         self.mirroring_sub = rospy.Subscriber('/behavior/attention/api/mirroring',UInt8, self.HandleMirroring)
         self.gaze_sub = rospy.Subscriber('/behavior/attention/api/gaze',UInt8, self.HandleGaze)
 
-        # start dynamic reconfigure server
-        self.configs_init = False
-        self.config_server = Server(AttentionConfig, self.HandleConfig, namespace='/current/attention')
-
-        # start timer
-        self.timer = rospy.Timer(rospy.Duration.from_sec(1.0 / self.synthesizer_rate), self.HandleTimer)
-
+    def ChangeFace(self, id):
+        if id <> self.last_face:
+            self.last_face = id
+            self.current_face_pub.publish(id)
 
     def UpdateStateDisplay(self):
         self.config_server.update_configuration({
@@ -209,84 +191,26 @@ class Attention:
 
     def HandleConfig(self, config, level):
         with self.lock:
-
-            if self.enable_flag != config.enable_flag:
-                self.enable_flag = config.enable_flag
-                # TODO: enable or disable the behaviors
-
-            # keep time
-            self.keep_time = config.keep_time
-            self.attetntion_region = config.attention_region
-            self.head_speed = config.head_speed
-            # update the counter ranges (and counters if the ranges changed)
-            if config.saliency_time_max < config.saliency_time_min:
-                config.saliency_time_max = config.saliency_time_min
-            if config.saliency_time_min != self.saliency_time_min or config.saliency_time_max != self.saliency_time_max:
-                self.saliency_time_min = config.saliency_time_min
-                self.saliency_time_max = config.saliency_time_max
-                self.InitSaliencyCounter()
-
-            if config.faces_time_max < config.faces_time_min:
-                config.faces_time_max = config.faces_time_min
-            if config.faces_time_min != self.faces_time_min or config.faces_time_max != self.faces_time_max:
-                self.faces_time_min = config.faces_time_min
-                self.faces_time_max = config.faces_time_max
-                self.InitFacesCounter()
-
-            if config.eyes_time_max < config.eyes_time_min:
-                config.eyes_time_max = config.eyes_time_min
-            if config.eyes_time_min != self.eyes_time_min or config.eyes_time_max != self.eyes_time_max:
-                self.eyes_time_min = config.eyes_time_min
-                self.eyes_time_max = config.eyes_time_max
-                self.InitEyesCounter()
-
-            if config.region_time_max < config.region_time_min:
-                config.region_time_max = config.region_time_min
-            if config.region_time_min != self.region_time_min or config.region_time_max != self.region_time_max:
-                self.region_time_min = config.region_time_min
-                self.region_time_max = config.region_time_max
-                self.InitRegionCounter()
-
-            self.face_state_decay = config.face_state_decay
-
-            self.gaze_delay = config.gaze_delay
-            self.gaze_speed = config.gaze_speed
-
-            self.interrupt_to_all_faces = config.interrupt_to_all_faces
-            self.interrupting = False
-
-            if config.all_faces_start_time_max < config.all_faces_start_time_min:
-                config.all_faces_start_time_max = config.all_faces_start_time_min
-            if config.all_faces_start_time_min != self.all_faces_start_time_min or config.all_faces_start_time_max != self.all_faces_start_time_max:
-                self.all_faces_start_time_min = config.all_faces_start_time_min
-                self.all_faces_start_time_max = config.all_faces_start_time_max
-                self.InitAllFacesStartCounter()
-
-            if config.all_faces_duration_max < config.all_faces_duration_min:
-                config.all_faces_duration_max = config.all_faces_duration_min
-            if config.all_faces_duration_min != self.all_faces_duration_min or config.all_faces_duration_max != self.all_faces_duration_max:
-                self.all_faces_duration_min = config.all_faces_duration_min
-                self.all_faces_duration_max = config.all_faces_duration_max
-                self.InitAllFacesDurationCounter()
-
+            self.config = config
             # and set the states for each state machine
             self.SetEyeContact(config.eyecontact_state)
             self.SetLookAt(config.lookat_state)
             self.SetMirroring(config.mirroring_state)
             self.SetGaze(config.gaze_state)
+            # Counters
+            if self.synthesizer_rate != self.old_synthesizer_rate or not self.configs_init:
+                if self.timer is not None:
+                    self.timer.shutdown()
+                self.old_synthesizer_rate = self.synthesizer_rate
+                self.timer = rospy.Timer(rospy.Duration.from_sec(1.0 / self.synthesizer_rate), self.HandleTimer)
+                self.InitSaliencyCounter()
+                self.InitFacesCounter()
+                self.InitEyesCounter()
+                self.InitRegionCounter()
+                self.InitAllFacesStartCounter()
+                self.InitAllFacesDurationCounter()
 
-        if self.synthesizer_rate != config.synthesizer_rate and not self.configs_init:
-            self.synthesizer_rate = config.synthesizer_rate
-            self.timer.shutdown()
-            self.timer = rospy.Timer(rospy.Duration.from_sec(1.0 / self.synthesizer_rate), self.HandleTimer)
-            self.InitSaliencyCounter()
-            self.InitFacesCounter()
-            self.InitEyesCounter()
-            self.InitRegionCounter()
-            self.InitAllFacesStartCounter()
-            self.InitAllFacesDurationCounter()
-
-        self.configs_init = True
+            self.configs_init = True
         return config
 
 
@@ -393,7 +317,7 @@ class Attention:
             regions = rospy.get_param("/{}/performance_regions".format(self.robot_name), {})
             if len(regions) == 0:
                 regions = rospy.get_param("/{}/egions".format(self.robot_name), {})
-            point = AttentionRegion.get_point_from_regions(regions, REGIONS[self.attetntion_region])
+            point = AttentionRegion.get_point_from_regions(regions, REGIONS[self.attention_region])
             return Point(x=point['x'], y=point['y'], z=point['z'])
         except Exception as e:
             logger.warn("Could not find new attention point: {}".format(e))
@@ -406,6 +330,8 @@ class Attention:
 
 
         curface = self.state.faces[self.current_face_index]
+
+        self.ChangeFace(curface.fsdk_id)
         face_pos = curface.position
 
         # ==== handle eyecontact (only for LookAt.ONE_FACE and LookAt.ALL_FACES)
@@ -520,12 +446,13 @@ class Attention:
 
 
     def HandleTimer(self, data):
-
+        looking_at_face = False
         with self.lock:
 
             if not self.configs_init:
                 return False
             if not self.enable_flag:
+                self.ChangeFace(-1)
                 return False
 
             # this is the heart of the synthesizer, here the lookat and eyecontact state machines take care of where the robot is looking, and random expressions and gestures are triggered to look more alive (like RealSense Tracker)
@@ -580,6 +507,7 @@ class Attention:
                         self.SelectNextFace()
                 try:
                     self.StepLookAtFace(ts)
+                    looking_at_face = True
                 except:
                     self.UpdateGaze(idle_point, ts, frame_id='blender')
 
@@ -617,6 +545,8 @@ class Attention:
                         self.SetLookAt(LookAt.ALL_FACES)
                         self.UpdateStateDisplay()
 
+        if not looking_at_face:
+            self.ChangeFace(-1)
 
     def SetEyeContact(self, neweyecontact):
 
