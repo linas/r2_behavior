@@ -52,6 +52,7 @@ class LookAt:
     HOLD = 6 # Do not move the head while in this state
 
 
+
 # params: current face
 
 
@@ -91,29 +92,12 @@ REGIONS = {
 # awareness: saliency, hands, faces, motion sensors
 
 class Attention:
-    def InitSaliencyCounter(self):
-        self.saliency_counter = random.randint(int(self.saliency_time_min * self.synthesizer_rate),
-                                               int(self.saliency_time_max * self.synthesizer_rate))
 
-    def InitFacesCounter(self):
-        self.faces_counter = random.randint(int(self.faces_time_min * self.synthesizer_rate),
-                                            int(self.faces_time_max * self.synthesizer_rate))
 
-    def InitEyesCounter(self):
-        self.eyes_counter = random.randint(int(self.eyes_time_min * self.synthesizer_rate),
-                                           int(self.eyes_time_max * self.synthesizer_rate))
-
-    def InitRegionCounter(self):
-        self.region_counter = random.randint(int(self.region_time_min * self.synthesizer_rate),
-                                             int(self.region_time_max * self.synthesizer_rate))
-
-    def InitAllFacesStartCounter(self):
-        self.all_faces_start_counter = random.randint(int(self.all_faces_start_time_min * self.synthesizer_rate),
-                                                      int(self.all_faces_start_time_max * self.synthesizer_rate))
-
-    def InitAllFacesDurationCounter(self):
-        self.all_faces_duration_counter = random.randint(int(self.all_faces_duration_min * self.synthesizer_rate),
-                                                         int(self.all_faces_duration_max * self.synthesizer_rate))
+    def InitCounter(self, counter, minmax):
+        val = random.randint(int(getattr(self, "{}_min".format(minmax)) * self.synthesizer_rate),
+                             int(getattr(self, "{}_max".format(minmax)) * self.synthesizer_rate))
+        setattr(self, "{}_counter".format(counter), val)
 
     def __getattr__(self, item):
         # Allow configuration attributes to be accessed directly
@@ -132,7 +116,7 @@ class Attention:
         self.mirroring = 0
         self.gaze = 0
         # setup face, hand and saliency structures
-        self.state = None
+        self.state = State()
         self.current_face_index = -1  # index to current face
         self.wanted_face_id = 0  # ID for wanted face
         self.current_saliency_index = -1  # index of current saliency vector
@@ -142,11 +126,14 @@ class Attention:
 
         self.gaze_delay_counter = 0  # delay counter after with gaze or head follows head or gaze
         self.gaze_pos = None  # current gaze position
+        # counter to run if face not visible
+        self.no_face_counter = 0
+        self.no_switch_counter = 0
 
         self.tf_listener = tf.TransformListener(False, rospy.Duration.from_sec(1))
 
         # tracks last face by fsdk_id, if changes informs eye tracking to pause
-        self.last_face = -2
+        self.last_target = -2
         rospy.Subscriber('/{}/perception/state'.format(self.robot_name), State, self.HandleState)
 
         self.head_focus_pub = rospy.Publisher('/blender_api/set_face_target', Target, queue_size=1)
@@ -155,9 +142,10 @@ class Attention:
         self.gestures_pub = rospy.Publisher('/blender_api/set_gesture', SetGesture, queue_size=1)
         self.animationmode_pub = rospy.Publisher('/blender_api/set_animation_mode', UInt8, queue_size=1)
         self.setpau_pub = rospy.Publisher('/blender_api/set_pau', pau, queue_size=1)
-        self.current_face_pub = rospy.Publisher('/behavior/current_face', Int64, queue_size=5, latch=True)
+        # Topic to publish target changes
+        self.current_target_pub = rospy.Publisher('/behavior/current_target', Int64, queue_size=5, latch=True)
 
-        self.old_synthesizer_rate  = 30
+        self.old_synthesizer_rate = 30
 
         self.hand_events_pub = rospy.Publisher('/hand_events', String, queue_size=1)
 
@@ -175,10 +163,15 @@ class Attention:
         self.mirroring_sub = rospy.Subscriber('/behavior/attention/api/mirroring',UInt8, self.HandleMirroring)
         self.gaze_sub = rospy.Subscriber('/behavior/attention/api/gaze',UInt8, self.HandleGaze)
 
-    def ChangeFace(self, id):
-        if id <> self.last_face:
-            self.last_face = id
-            self.current_face_pub.publish(id)
+
+
+    def ChangeTarget(self, id=None):
+        if id is None:
+            id = int(time.time()*10)
+        if id <> self.last_target:
+            self.last_target = id
+            self.current_target_pub.publish(id)
+
 
     def UpdateStateDisplay(self):
         self.config_server.update_configuration({
@@ -203,12 +196,13 @@ class Attention:
                     self.timer.shutdown()
                 self.old_synthesizer_rate = self.synthesizer_rate
                 self.timer = rospy.Timer(rospy.Duration.from_sec(1.0 / self.synthesizer_rate), self.HandleTimer)
-                self.InitSaliencyCounter()
-                self.InitFacesCounter()
-                self.InitEyesCounter()
-                self.InitRegionCounter()
-                self.InitAllFacesStartCounter()
-                self.InitAllFacesDurationCounter()
+                self.InitCounter("saliency","saliency_time")
+                self.InitCounter("faces", "faces_time")
+                self.InitCounter("eyes", "eyes_time")
+                self.InitCounter("region", "region_time")
+                self.InitCounter("all_faces_start", "all_faces_start_time")
+                self.InitCounter("all_faces_duration", "all_faces_duration")
+                self.InitCounter("rest", "rest_time")
 
             self.configs_init = True
         return config
@@ -311,16 +305,15 @@ class Attention:
 
 
     def SelectNextRegion(self):
-        # switch to next region point(according to audience ROI)
-        try:
-            # Check if performance has set regions
-            regions = rospy.get_param("/{}/performance_regions".format(self.robot_name), {})
-            if len(regions) == 0:
-                regions = rospy.get_param("/{}/egions".format(self.robot_name), {})
-            point = AttentionRegion.get_point_from_regions(regions, REGIONS[self.attention_region])
-            return Point(x=point['x'], y=point['y'], z=point['z'])
-        except Exception as e:
-            logger.warn("Could not find new attention point: {}".format(e))
+        # Check if performance has set regions
+        regions = rospy.get_param("/{}/performance_regions".format(self.robot_name), {})
+        if len(regions) == 0:
+            regions = rospy.get_param("/{}/regions".format(self.robot_name), {})
+        print(regions)
+        point = AttentionRegion.get_point_from_regions(regions, REGIONS[self.attention_region])
+        if point['x'] == 1 and point['y'] == 0 and point['z'] == 0:
+            raise Exception("Only idle point found")
+        return Point(x=point['x'], y=point['y'], z=point['z'])
 
 
     def StepLookAtFace(self, ts):
@@ -328,10 +321,12 @@ class Attention:
         if self.current_face_index == -1:
             raise Exception("No face available")
 
+        try:
+            curface = self.state.faces[self.current_face_index]
+        except:
+            raise Exception("No face available")
 
-        curface = self.state.faces[self.current_face_index]
-
-        self.ChangeFace(curface.fsdk_id)
+        self.ChangeTarget(curface.fsdk_id)
         face_pos = curface.position
 
         # ==== handle eyecontact (only for LookAt.ONE_FACE and LookAt.ALL_FACES)
@@ -370,7 +365,7 @@ class Attention:
             # switch between eyes back and forth
             self.eyes_counter -= 1
             if self.eyes_counter == 0:
-                self.InitEyesCounter()
+                self.InitCounter("eyes", "eyes_time")
                 if self.current_eye == 1:
                     self.current_eye = 0
                 else:
@@ -386,7 +381,7 @@ class Attention:
             # cycle between eyes and mouth
             self.eyes_counter -= 1
             if self.eyes_counter == 0:
-                self.InitEyesCounter()
+                self.InitCounter("eyes", "eyes_time")
                 if self.current_eye == 2:
                     self.current_eye = 0
                 else:
@@ -447,35 +442,35 @@ class Attention:
 
     def HandleTimer(self, data):
         looking_at_face = False
+        print("TIME")
         with self.lock:
 
             if not self.configs_init:
                 return False
             if not self.enable_flag:
-                self.ChangeFace(-1)
+
+                self.ChangeTarget(-1)
                 return False
 
             # this is the heart of the synthesizer, here the lookat and eyecontact state machines take care of where the robot is looking, and random expressions and gestures are triggered to look more alive (like RealSense Tracker)
             ts = data.current_expected
             #If nowhere to look, straighten the head
             idle_point = Point(x = 1, y=0, z=0)
+            # Fallback to look at region
+            region = False
+            # Fallback o rest
+            idle =False
             # ==== handle lookat
-            if self.lookat == LookAt.IDLE:
-                # no specific target, let Blender do it's soma cycle thing
-                # Reset to look ahead to prevent weird
-                self.UpdateGaze(idle_point,ts, frame_id='blender')
-                ()
-
-            elif self.lookat == LookAt.AVOID:
+            if self.lookat == LookAt.AVOID:
                 # TODO: find out where there is no saliency, hand or face
                 # TODO: head_focus_pub
                 ()
 
-            elif self.lookat == LookAt.HOLD:
+            if self.lookat == LookAt.HOLD:
                 # Do nothing
-                ()
+                pass
 
-            elif self.lookat == LookAt.SALIENCY:
+            if self.lookat == LookAt.SALIENCY:
                 self.saliency_counter -= 1
                 if self.saliency_counter == 0:
                     self.SelectNextSalientPoint()
@@ -484,33 +479,78 @@ class Attention:
                         self.UpdateGaze(idle_point, ts, frame_id='blender')
                     else:
                         # Init counter only if any salient point found
-                        self.InitSaliencyCounter()
+                        self.InitCounter("saliency","saliency_time")
 
                 if self.current_saliency_index != -1:
                     cursaliency = self.state.salientpoints[self.current_saliency_index]
                     self.UpdateGaze(cursaliency.position, ts)
 
-            elif self.lookat == LookAt.REGION:
+            if self.lookat == LookAt.ALL_FACES:
+                self.faces_counter -= 1
+                self.no_switch_counter -= 1
+                if self.faces_counter <= 0 and self.no_switch_counter <= 0:
+                        self.SelectNextFace()
+                        self.no_switch_counter = self.synthesizer_rate * self.min_time_between_targets
+                        self.InitCounter("faces", "faces_time")
+                try:
+                    # This will make sure robot will look somewhere so eye contact only should be paused
+                    # It should fallback to attention region if defined or idle point
+                    looking_at_face = True
+                    # only look at faces after switch is allowed:
+                    self.StepLookAtFace(ts)
+                    # Reset after face is found
+                    self.no_face_counter = 0
+                except:
+                    # look around region and or idle point for the
+                    # If no face find some other point from region and or rest point to find some people
+                    self.no_face_counter -= 1
+                    if self.no_face_counter <= 0:
+                        try:
+                            print(self.attention_region)
+                            point = self.SelectNextRegion()
+                            print ("ATTENTION {}".format(point))
+                            self.InitCounter('no_face', 'region_time')
+                        except Exception as e:
+                            # Random point
+                            point =Point(x=1, y=random.uniform(-self.rest_range_x, self.rest_range_y)
+                                       , z=random.uniform(-self.rest_range_y, self.rest_range_y))
+                            print ("REST {}".format(point))
+                            print(e)
+                            self.InitCounter('no_face', 'rest_time')
+                        # regions and or rest points are defined in blender coordinates
+                        self.UpdateGaze(point, ts, frame_id='blender')
+                        self.ChangeTarget()
+                        self.no_switch_counter = self.synthesizer_rate * self.min_time_between_targets
+
+            if self.lookat == LookAt.REGION or region:
                 self.region_counter -= 1
                 if self.region_counter == 0:
-                    self.InitRegionCounter()
+                    # Eye contact enabled when looking at region
+                    if self.eyecontact > 0:
+                        looking_at_face = True
+                    self.InitCounter("region", "region_time")
                     # SelectNextRegion returns idle point if no region set
-                    point = self.SelectNextRegion()
+                    try:
+                        point = self.SelectNextRegion()
+                        # Attention points are calculated in blender frame
+                        self.UpdateGaze(point, ts, frame_id='blender')
+                        # Target have been changed
+
+                    except:
+                        idle = True
+
+            if self.lookat == LookAt.IDLE or idle:
+                self.rest_counter -= 1
+                if self.rest_counter == 0:
+                    self.InitCounter("rest", "rest_time")
+                    if self.eyecontact > 0:
+                        looking_at_face = True
+                    idle_point = Point(x=1, y=random.uniform(-self.rest_range_x, self.rest_range_y)
+                                       , z=random.uniform(-self.rest_range_y, self.rest_range_y))
                     # Attention points are calculated in blender frame
-                    self.UpdateGaze(point, ts, frame_id='blender')
-
-            else:
-                if self.lookat == LookAt.ALL_FACES:
-                    self.faces_counter -= 1
-                    if self.faces_counter == 0:
-                        self.InitFacesCounter()
-                        self.SelectNextFace()
-                try:
-                    self.StepLookAtFace(ts)
-                    looking_at_face = True
-                except:
                     self.UpdateGaze(idle_point, ts, frame_id='blender')
-
+                    # Target have been changed
+                    self.ChangeTarget()
 
             # have gaze or head follow head or gaze after a while
             if self.gaze_delay_counter > 0 and self.gaze_pos != None:
@@ -533,20 +573,20 @@ class Attention:
                     self.all_faces_duration_counter -= 1
                     if self.all_faces_duration_counter <= 0:
                         self.interrupting = False
-                        self.InitAllFacesDurationCounter()
+                        self.InitCounter("all_faces_duration", "all_faces_duration")
                         self.SetLookAt(self.interrupted_state)
                         self.UpdateStateDisplay()
                 else:
                     self.all_faces_start_counter -= 1
                     if self.all_faces_start_counter <= 0:
                         self.interrupting = True
-                        self.InitAllFacesStartCounter()
+                        self.InitCounter("all_faces_start", "all_faces_start_time")
                         self.interrupted_state = self.lookat
                         self.SetLookAt(LookAt.ALL_FACES)
                         self.UpdateStateDisplay()
 
         if not looking_at_face:
-            self.ChangeFace(-1)
+            self.ChangeTarget(-1)
 
     def SetEyeContact(self, neweyecontact):
 
@@ -557,7 +597,7 @@ class Attention:
         self.eyecontact = neweyecontact
 
         if self.eyecontact == EyeContact.BOTH_EYES or self.eyecontact == EyeContact.TRIANGLE:
-            self.InitEyesCounter()
+            self.InitCounter("eyes", "eyes_time")
 
 
     def SetLookAt(self, newlookat):
@@ -569,18 +609,20 @@ class Attention:
         self.lookat = newlookat
 
         if self.lookat == LookAt.SALIENCY:
-            self.InitSaliencyCounter()
+            self.InitCounter("saliency","saliency_time")
 
         elif self.lookat == LookAt.ONE_FACE:
-            self.InitEyesCounter()
+            self.InitCounter("eyes", "eyes_time")
 
         elif self.lookat == LookAt.ALL_FACES:
-            self.InitFacesCounter()
-            self.InitEyesCounter()
+            self.InitCounter("faces", "faces_time")
+            self.InitCounter("eyes", "eyes_time")
 
         elif self.lookat == LookAt.REGION:
-            self.InitRegionCounter()
+            self.InitCounter("region", "region_time")
 
+        elif self.lookat == LookAt.IDLE:
+            self.InitCounter("rest", "rest_time")
 
     def StartPauMode(self):
 
@@ -640,7 +682,9 @@ class Attention:
 
             # otherwise, just make sure current_face_index is valid
             elif (self.current_face_index >= len(self.state.faces)) or (self.current_face_index == -1):
-                self.SelectNextFace()
+                # Only try to look at new faces once there are no
+                if self.no_switch_counter <= 0:
+                    self.SelectNextFace()
             # TODO: it's better to have the robot look at the same ID, regardless of which index in the stateface list
 
             # if there is no current saliency or the current saliency is out of range, select a new current saliency
