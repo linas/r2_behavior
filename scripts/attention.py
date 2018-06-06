@@ -357,7 +357,7 @@ class Attention:
     def SelectNextFace(self):
 
         # switch to the next (or first) face
-        if len(self.state.faces) == 0:
+        if self.state is None or len(self.state.faces) == 0:
             # there are no faces, so select none
             self.current_face_index = -1
             return
