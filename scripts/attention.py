@@ -50,7 +50,7 @@ class LookAt:
     ALL_FACES = 4  # look at all faces, make eye contact and switch
     REGION = 5  # look at the region and switch
     HOLD = 6 # Do not move the head while in  this state
-
+    NEAREST_FACE = 7  # only look at face closest to the robot. This ensures robot do not get distracted by other people around
 
 # params: current face
 
@@ -361,12 +361,19 @@ class Attention:
             # there are no faces, so select none
             self.current_face_index = -1
             return
-        if self.current_face_index == -1:
-            self.current_face_index = 0
+
+
+        if self.lookat  == LookAt.NEAREST_FACE:
+            self.current_face_index, f = min(enumerate(self.state.faces),
+                                             key=lambda f: (f[1].position.x**2+f[1].position.y**2))
         else:
-            self.current_face_index += 1
-            if self.current_face_index >= len(self.state.faces):
+            # Pick random or any other face from list
+            if self.current_face_index == -1:
                 self.current_face_index = 0
+            else:
+                self.current_face_index += 1
+                if self.current_face_index >= len(self.state.faces):
+                    self.current_face_index = 0
 
 
     def SelectNextSalientPoint(self):
@@ -573,7 +580,7 @@ class Attention:
                     self.UpdateGaze(point, ts, frame_id='blender')
 
             else:
-                if self.lookat == LookAt.ALL_FACES:
+                if self.lookat == LookAt.ALL_FACES or self.lookat == LookAt.NEAREST_FACE:
                     self.faces_counter -= 1
                     if self.faces_counter == 0:
                         self.InitFacesCounter()
