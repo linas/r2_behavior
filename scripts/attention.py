@@ -1,30 +1,24 @@
 #!/usr/bin/env python
 import rospy
-import tf
 import time
 import threading
-import math
 import operator
 import random
-import numpy as np
-import json
-import os
-import yaml
-import random
-import pprint
-from dynamic_reconfigure.server import Server
-import dynamic_reconfigure.client
-from r2_behavior.cfg import AttentionConfig
-from r2_behavior.msg import APILookAt
-from blender_api_msgs.msg import Target, EmotionState, SetGesture
-from std_msgs.msg import String, Float64, UInt8
-from geometry_msgs.msg import Point
-from r2_perception.msg import State, Face, SalientPoint
-from hr_msgs.msg import pau
-from geometry_msgs.msg import Point,PointStamped
-# Attention regions
-from performances.nodes import attention as AttentionRegion
 import logging
+
+# Attention regions
+from dynamic_reconfigure.server import Server
+from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point,PointStamped
+from hr_msgs.msg import APILookAt
+from hr_msgs.msg import State, Face, SalientPoint
+from hr_msgs.msg import Target, EmotionState, SetGesture
+from hr_msgs.msg import pau
+from performances.nodes import attention as AttentionRegion
+from r2_behavior.cfg import AttentionConfig
+from std_msgs.msg import String, Float64, UInt8
+import dynamic_reconfigure.client
+import tf
 
 logger = logging.getLogger('hr.r2_behavior.attention')
 
