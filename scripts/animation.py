@@ -6,7 +6,7 @@ import json
 import numpy as np
 
 import rospy
-from blender_api_msgs.msg import EmotionState, SetGesture
+from hr_msgs.msg import EmotionState, SetGesture
 from r2_behavior.cfg import AnimationConfig
 from dynamic_reconfigure.server import Server
 

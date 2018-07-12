@@ -1,28 +1,28 @@
 #!/usr/bin/env python
-import logging
-
-from transitions.extensions import HierarchicalMachine
-from transitions.extensions.nesting import NestedState
-
-import rospy
 import os
+import logging
 import re
 import random
 import yaml
-from std_msgs.msg import String, Bool, Float32
-from blender_api_msgs.msg import Target, SomaState
-from blender_api_msgs.srv import SetParam
-import time
-import performances.srv as srv
-from performances.msg import Event as PerformanceEvent
 import subprocess
 import threading
-import dynamic_reconfigure.client
-from hr_msgs.msg import ChatMessage
+import time
+
+import rospy
+from transitions.extensions import HierarchicalMachine
+from transitions.extensions.nesting import NestedState
+
+from blender_api_msgs.srv import SetParam
 from dynamic_reconfigure.server import Server
+from hr_msgs.msg import ChatMessage
+from hr_msgs.msg import Event as PerformanceEvent
+from hr_msgs.msg import State
+from hr_msgs.msg import Target, SomaState
 from performances.nodes import pause
 from r2_behavior.cfg import AttentionConfig, AnimationConfig, StatesConfig, StateConfig
-from r2_perception.msg import State
+from std_msgs.msg import String, Bool, Float32
+import dynamic_reconfigure.client
+import performances.srv as srv
 
 logger = logging.getLogger('hr.behavior.states')
 

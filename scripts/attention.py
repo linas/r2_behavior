@@ -1,30 +1,24 @@
 #!/usr/bin/env python
 import rospy
-import tf
 import time
 import threading
-import math
 import operator
 import random
-import numpy as np
-import json
-import os
-import yaml
-import random
-import pprint
-from dynamic_reconfigure.server import Server
-import dynamic_reconfigure.client
-from r2_behavior.cfg import AttentionConfig
-from r2_behavior.msg import APILookAt
-from blender_api_msgs.msg import Target, EmotionState, SetGesture
-from std_msgs.msg import String, Float64, UInt8, Int64
-from geometry_msgs.msg import Point
-from r2_perception.msg import State, Face, SalientPoint
-from hr_msgs.msg import pau
-from geometry_msgs.msg import Point,PointStamped
-# Attention regions
-from performances.nodes import attention as AttentionRegion
 import logging
+
+# Attention regions
+from dynamic_reconfigure.server import Server
+from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point,PointStamped
+from hr_msgs.msg import APILookAt
+from hr_msgs.msg import State, Face, SalientPoint
+from hr_msgs.msg import Target, EmotionState, SetGesture
+from hr_msgs.msg import pau
+from performances.nodes import attention as AttentionRegion
+from r2_behavior.cfg import AttentionConfig
+from std_msgs.msg import String, Float64, UInt8
+import dynamic_reconfigure.client
+import tf
 
 logger = logging.getLogger('hr.r2_behavior.attention')
 
@@ -49,9 +43,8 @@ class LookAt:
     ONE_FACE = 3  # look at single face and make eye contact
     ALL_FACES = 4  # look at all faces, make eye contact and switch
     REGION = 5  # look at the region and switch
-    HOLD = 6 # Do not move the head while in this state
-
-
+    HOLD = 6 # Do not move the head while in  this state
+    NEAREST_FACE = 7  # only look at face closest to the robot. This ensures robot do not get distracted by other people around
 
 # params: current face
 
@@ -275,16 +268,23 @@ class Attention:
     def SelectNextFace(self):
 
         # switch to the next (or first) face
-        if len(self.state.faces) == 0:
+        if self.state is None or len(self.state.faces) == 0:
             # there are no faces, so select none
             self.current_face_index = -1
             return
-        if self.current_face_index == -1:
-            self.current_face_index = 0
+
+
+        if self.lookat  == LookAt.NEAREST_FACE:
+            self.current_face_index, f = min(enumerate(self.state.faces),
+                                             key=lambda f: (f[1].position.x**2+f[1].position.y**2))
         else:
-            self.current_face_index += 1
-            if self.current_face_index >= len(self.state.faces):
+            # Pick random or any other face from list
+            if self.current_face_index == -1:
                 self.current_face_index = 0
+            else:
+                self.current_face_index += 1
+                if self.current_face_index >= len(self.state.faces):
+                    self.current_face_index = 0
 
 
     def SelectNextSalientPoint(self):
@@ -485,10 +485,20 @@ class Attention:
                     cursaliency = self.state.salientpoints[self.current_saliency_index]
                     self.UpdateGaze(cursaliency.position, ts)
 
-            if self.lookat == LookAt.ALL_FACES:
-                self.faces_counter -= 1
-                self.no_switch_counter -= 1
-                if self.faces_counter <= 0 and self.no_switch_counter <= 0:
+            elif self.lookat == LookAt.REGION:
+                self.region_counter -= 1
+                if self.region_counter == 0:
+                    self.InitRegionCounter()
+                    # SelectNextRegion returns idle point if no region set
+                    point = self.SelectNextRegion()
+                    # Attention points are calculated in blender frame
+                    self.UpdateGaze(point, ts, frame_id='blender')
+
+            else:
+                if self.lookat == LookAt.ALL_FACES or self.lookat == LookAt.NEAREST_FACE:
+                    self.faces_counter -= 1
+                    if self.faces_counter == 0:
+                        self.InitFacesCounter()
                         self.SelectNextFace()
                         self.no_switch_counter = self.synthesizer_rate * self.min_time_between_targets
                         self.InitCounter("faces", "faces_time")
