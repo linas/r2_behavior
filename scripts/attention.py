@@ -16,7 +16,7 @@ from hr_msgs.msg import Target, EmotionState, SetGesture
 from hr_msgs.msg import pau
 from performances.nodes import attention as AttentionRegion
 from r2_behavior.cfg import AttentionConfig
-from std_msgs.msg import String, Float64, UInt8
+from std_msgs.msg import String, Float64, UInt8, Int64
 import dynamic_reconfigure.client
 import tf
 
