@@ -11,7 +11,7 @@ from dynamic_reconfigure.server import Server
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Point,PointStamped
 from hr_msgs.msg import APILookAt
-from hr_msgs.msg import State, Face, SalientPoint
+from r2_perception.msg import State, Face, SalientPoint
 from hr_msgs.msg import Target, EmotionState, SetGesture
 from hr_msgs.msg import pau
 from performances.nodes import attention as AttentionRegion
@@ -266,13 +266,11 @@ class Attention:
 
 
     def SelectNextFace(self):
-
         # switch to the next (or first) face
         if self.state is None or len(self.state.faces) == 0:
             # there are no faces, so select none
             self.current_face_index = -1
             return
-
 
         if self.lookat  == LookAt.NEAREST_FACE:
             self.current_face_index, f = min(enumerate(self.state.faces),
@@ -309,7 +307,6 @@ class Attention:
         regions = rospy.get_param("/{}/performance_regions".format(self.robot_name), {})
         if len(regions) == 0:
             regions = rospy.get_param("/{}/regions".format(self.robot_name), {})
-        print(regions)
         point = AttentionRegion.get_point_from_regions(regions, REGIONS[self.attention_region])
         if point['x'] == 1 and point['y'] == 0 and point['z'] == 0:
             raise Exception("Only idle point found")
@@ -442,7 +439,7 @@ class Attention:
 
     def HandleTimer(self, data):
         looking_at_face = False
-        print("TIME")
+
         with self.lock:
 
             if not self.configs_init:
@@ -498,7 +495,6 @@ class Attention:
                 if self.lookat == LookAt.ALL_FACES or self.lookat == LookAt.NEAREST_FACE:
                     self.faces_counter -= 1
                     if self.faces_counter == 0:
-                        self.InitFacesCounter()
                         self.SelectNextFace()
                         self.no_switch_counter = self.synthesizer_rate * self.min_time_between_targets
                         self.InitCounter("faces", "faces_time")
@@ -516,16 +512,12 @@ class Attention:
                     self.no_face_counter -= 1
                     if self.no_face_counter <= 0:
                         try:
-                            print(self.attention_region)
                             point = self.SelectNextRegion()
-                            print ("ATTENTION {}".format(point))
                             self.InitCounter('no_face', 'region_time')
                         except Exception as e:
                             # Random point
                             point =Point(x=1, y=random.uniform(-self.rest_range_x, self.rest_range_y)
                                        , z=random.uniform(-self.rest_range_y, self.rest_range_y))
-                            print ("REST {}".format(point))
-                            print(e)
                             self.InitCounter('no_face', 'rest_time')
                         # regions and or rest points are defined in blender coordinates
                         self.UpdateGaze(point, ts, frame_id='blender')
@@ -675,7 +667,6 @@ class Attention:
 
 
     def HandleState(self, data):
-
         with self.lock:
 
             self.state = data
