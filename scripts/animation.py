@@ -53,11 +53,10 @@ class Expressions:
             expression.duration = rospy.Duration(
                 max(1, random.uniform(float(e['duration_min']), float(e['duration_max'])) *
                     self.config['expression_duration']))
-            logger.info(json.dumps({
-                'type': 'expression',
+            logger.info('animation-expression', extra={'data': {
                 'name': expression.name,
                 'magnitude': expression.magnitude,
-                'duration': expression.duration.secs}))
+                'duration': expression.duration.secs}})
             return expression
         return None
 
@@ -82,11 +81,10 @@ class Gestures:
                                            self.config['gesture_magnitude']))
             gesture.speed = min(3, random.uniform(float(g['speed_min']), float(g['speed_max'])) *
                                 self.config['gesture_speed'])
-            logger.info(json.dumps({
-                'type': 'gesture',
+            logger.info('animation-gesture', extra={'data': {
                 'name': gesture.name,
                 'magnitude': gesture.magnitude,
-                'speed': gesture.speed}))
+                'speed': gesture.speed}})
             return gesture
         return None
 
