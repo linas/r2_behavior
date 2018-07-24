@@ -485,7 +485,7 @@ class Attention:
             elif self.lookat == LookAt.REGION:
                 self.region_counter -= 1
                 if self.region_counter == 0:
-                    self.InitRegionCounter()
+                    self.InitCounter("region", "region_time")
                     # SelectNextRegion returns idle point if no region set
                     point = self.SelectNextRegion()
                     # Attention points are calculated in blender frame
@@ -498,31 +498,31 @@ class Attention:
                         self.SelectNextFace()
                         self.no_switch_counter = self.synthesizer_rate * self.min_time_between_targets
                         self.InitCounter("faces", "faces_time")
-                try:
-                    # This will make sure robot will look somewhere so eye contact only should be paused
-                    # It should fallback to attention region if defined or idle point
-                    looking_at_face = True
-                    # only look at faces after switch is allowed:
-                    self.StepLookAtFace(ts)
-                    # Reset after face is found
-                    self.no_face_counter = 0
-                except:
-                    # look around region and or idle point for the
-                    # If no face find some other point from region and or rest point to find some people
-                    self.no_face_counter -= 1
-                    if self.no_face_counter <= 0:
-                        try:
-                            point = self.SelectNextRegion()
-                            self.InitCounter('no_face', 'region_time')
-                        except Exception as e:
-                            # Random point
-                            point =Point(x=1, y=random.uniform(-self.rest_range_x, self.rest_range_y)
-                                       , z=random.uniform(-self.rest_range_y, self.rest_range_y))
-                            self.InitCounter('no_face', 'rest_time')
-                        # regions and or rest points are defined in blender coordinates
-                        self.UpdateGaze(point, ts, frame_id='blender')
-                        self.ChangeTarget()
-                        self.no_switch_counter = self.synthesizer_rate * self.min_time_between_targets
+                    try:
+                        # This will make sure robot will look somewhere so eye contact only should be paused
+                        # It should fallback to attention region if defined or idle point
+                        looking_at_face = True
+                        # only look at faces after switch is allowed:
+                        self.StepLookAtFace(ts)
+                        # Reset after face is found
+                        self.no_face_counter = 0
+                    except:
+                        # look around region and or idle point for the
+                        # If no face find some other point from region and or rest point to find some people
+                        self.no_face_counter -= 1
+                        if self.no_face_counter <= 0:
+                            try:
+                                point = self.SelectNextRegion()
+                                self.InitCounter('no_face', 'region_time')
+                            except Exception as e:
+                                # Random point
+                                point =Point(x=1, y=random.uniform(-self.rest_range_x, self.rest_range_y)
+                                           , z=random.uniform(-self.rest_range_y, self.rest_range_y))
+                                self.InitCounter('no_face', 'rest_time')
+                            # regions and or rest points are defined in blender coordinates
+                            self.UpdateGaze(point, ts, frame_id='blender')
+                            self.ChangeTarget()
+                            self.no_switch_counter = self.synthesizer_rate * self.min_time_between_targets
 
             if self.lookat == LookAt.REGION or region:
                 self.region_counter -= 1
