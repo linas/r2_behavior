@@ -45,6 +45,7 @@ class LookAt:
     REGION = 5  # look at the region and switch
     HOLD = 6 # Do not move the head while in  this state
     NEAREST_FACE = 7  # only look at face closest to the robot. This ensures robot do not get distracted by other people around
+    POSES = 8
 
 # params: current face
 
@@ -88,8 +89,13 @@ class Attention:
 
 
     def InitCounter(self, counter, minmax):
-        val = random.randint(int(getattr(self, "{}_min".format(minmax)) * self.synthesizer_rate),
-                             int(getattr(self, "{}_max".format(minmax)) * self.synthesizer_rate))
+        try:
+            min_v = min(int(getattr(self, "{}_min".format(minmax))), int(getattr(self, "{}_max".format(minmax))))
+            max_v = max(int(getattr(self, "{}_min".format(minmax))), int(getattr(self, "{}_max".format(minmax))))
+            val = random.randint(int(min_v * self.synthesizer_rate),
+                                 int(max_v * self.synthesizer_rate))
+        except:
+            val = 1
         setattr(self, "{}_counter".format(counter), val)
 
     def __getattr__(self, item):
@@ -181,7 +187,7 @@ class Attention:
             # and set the states for each state machine
             self.SetEyeContact(config.eyecontact_state)
             self.SetLookAt(config.lookat_state)
-            self.SetMirroring(config.mirroring_state)
+            # self.SetMirroring(config.mirroring_state)
             self.SetGaze(config.gaze_state)
             # Counters
             if self.synthesizer_rate != self.old_synthesizer_rate or not self.configs_init:
@@ -189,12 +195,12 @@ class Attention:
                     self.timer.shutdown()
                 self.old_synthesizer_rate = self.synthesizer_rate
                 self.timer = rospy.Timer(rospy.Duration.from_sec(1.0 / self.synthesizer_rate), self.HandleTimer)
-                self.InitCounter("saliency","saliency_time")
+                # self.InitCounter("saliency","saliency_time")
                 self.InitCounter("faces", "faces_time")
-                self.InitCounter("eyes", "eyes_time")
+                #self.InitCounter("eyes", "eyes_time")
                 self.InitCounter("region", "region_time")
-                self.InitCounter("all_faces_start", "all_faces_start_time")
-                self.InitCounter("all_faces_duration", "all_faces_duration")
+                # self.InitCounter("all_faces_start", "all_faces_start_time")
+                # self.InitCounter("all_faces_duration", "all_faces_duration")
                 self.InitCounter("rest", "rest_time")
 
             self.configs_init = True
@@ -283,6 +289,16 @@ class Attention:
                 self.current_face_index += 1
                 if self.current_face_index >= len(self.state.faces):
                     self.current_face_index = 0
+
+    def SelectNextPose(self):
+        # switch to the next (or first) face
+        if self.state is None or len(self.state.poses) == 0:
+            # there are no faces, so select none
+            return False
+
+        i, p = min(enumerate(self.state.poses),
+                                         key=lambda f: (f[1].position.x**2+f[1].position.y**2))
+        return p
 
 
     def SelectNextSalientPoint(self):
@@ -490,6 +506,12 @@ class Attention:
                     point = self.SelectNextRegion()
                     # Attention points are calculated in blender frame
                     self.UpdateGaze(point, ts, frame_id='blender')
+            elif self.lookat == LookAt.POSES:
+                pose = self.SelectNextPose()
+                print(pose)
+                if pose:
+                    self.UpdateGaze(pose.position, ts)
+
 
             else:
                 if self.lookat == LookAt.ALL_FACES or self.lookat == LookAt.NEAREST_FACE:
@@ -569,23 +591,23 @@ class Attention:
                         self.gaze_delay_counter = int(self.gaze_delay * self.synthesizer_rate)
 
             # when speaking, sometimes look at all faces
-            if self.interrupt_to_all_faces:
-
-                if self.interrupting:
-                    self.all_faces_duration_counter -= 1
-                    if self.all_faces_duration_counter <= 0:
-                        self.interrupting = False
-                        self.InitCounter("all_faces_duration", "all_faces_duration")
-                        self.SetLookAt(self.interrupted_state)
-                        self.UpdateStateDisplay()
-                else:
-                    self.all_faces_start_counter -= 1
-                    if self.all_faces_start_counter <= 0:
-                        self.interrupting = True
-                        self.InitCounter("all_faces_start", "all_faces_start_time")
-                        self.interrupted_state = self.lookat
-                        self.SetLookAt(LookAt.ALL_FACES)
-                        self.UpdateStateDisplay()
+            # if self.interrupt_to_all_faces:
+            #
+            #     if self.interrupting:
+            #         self.all_faces_duration_counter -= 1
+            #         if self.all_faces_duration_counter <= 0:
+            #             self.interrupting = False
+            #             self.InitCounter("all_faces_duration", "all_faces_duration")
+            #             self.SetLookAt(self.interrupted_state)
+            #             self.UpdateStateDisplay()
+            #     else:
+            #         self.all_faces_start_counter -= 1
+            #         if self.all_faces_start_counter <= 0:
+            #             self.interrupting = True
+            #             self.InitCounter("all_faces_start", "all_faces_start_time")
+            #             self.interrupted_state = self.lookat
+            #             self.SetLookAt(LookAt.ALL_FACES)
+            #             self.UpdateStateDisplay()
 
         if not looking_at_face:
             self.ChangeTarget(-1)
@@ -598,8 +620,8 @@ class Attention:
 
         self.eyecontact = neweyecontact
 
-        if self.eyecontact == EyeContact.BOTH_EYES or self.eyecontact == EyeContact.TRIANGLE:
-            self.InitCounter("eyes", "eyes_time")
+        # if self.eyecontact == EyeContact.BOTH_EYES or self.eyecontact == EyeContact.TRIANGLE:
+        #     self.InitCounter("eyes", "eyes_time")
 
 
     def SetLookAt(self, newlookat):
@@ -613,12 +635,12 @@ class Attention:
         if self.lookat == LookAt.SALIENCY:
             self.InitCounter("saliency","saliency_time")
 
-        elif self.lookat == LookAt.ONE_FACE:
-            self.InitCounter("eyes", "eyes_time")
+        # elif self.lookat == LookAt.ONE_FACE:
+        #     self.InitCounter("eyes", "eyes_time")
 
         elif self.lookat == LookAt.ALL_FACES:
             self.InitCounter("faces", "faces_time")
-            self.InitCounter("eyes", "eyes_time")
+            # self.InitCounter("eyes", "eyes_time")
 
         elif self.lookat == LookAt.REGION:
             self.InitCounter("region", "region_time")
@@ -688,9 +710,9 @@ class Attention:
                     self.SelectNextFace()
             # TODO: it's better to have the robot look at the same ID, regardless of which index in the stateface list
 
-            # if there is no current saliency or the current saliency is out of range, select a new current saliency
-            if (self.current_saliency_index >= len(self.state.salientpoints)) or (self.current_saliency_index == -1):
-                self.SelectNextSaliency()
+            # # if there is no current saliency or the current saliency is out of range, select a new current saliency
+            # if (self.current_saliency_index >= len(self.state.salientpoints)) or (self.current_saliency_index == -1):
+            #     self.SelectNextSaliency()
 
 
     def HandleEyeContact(self,data):
