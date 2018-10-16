@@ -5,7 +5,7 @@ import threading
 import operator
 import random
 import logging
-
+import math
 # Attention regions
 from dynamic_reconfigure.server import Server
 from geometry_msgs.msg import Point
@@ -52,15 +52,15 @@ class LookAt:
 
 # the mirroring machine is the lowest level and has the robot mirror the face it is currently looking at
 # this is purely mechanical, so it follows a very strict control logic; the overall state machine controls which mirroring more is actually used by switching the mirroring state
-class Mirroring:
-    IDLE = 0  # no mirroring
-    EYEBROWS = 1  # mirror the eyebrows only
-    EYELIDS = 2  # mirror the blinking only
-    EYES = 3  # mirror eyebrows and eyelids
-    MOUTH = 4  # mirror mouth opening
-    MOUTH_EYEBROWS = 5  # mirror mouth and eyebrows
-    MOUTH_EYELIDS = 6  # mirror mouth and eyelids
-    ALL = 7  # mirror everything
+# class Mirroring:
+#     IDLE = 0  # no mirroring
+#     EYEBROWS = 1  # mirror the eyebrows only
+#     EYELIDS = 2  # mirror the blinking only
+#     EYES = 3  # mirror eyebrows and eyelids
+#     MOUTH = 4  # mirror mouth opening
+#     MOUTH_EYEBROWS = 5  # mirror mouth and eyebrows
+#     MOUTH_EYELIDS = 6  # mirror mouth and eyelids
+#     ALL = 7  # mirror everything
 
 
 # params: eyebrows magnitude, eyelid magnitude, mouth magnitude
@@ -128,7 +128,9 @@ class Attention:
         # counter to run if face not visible
         self.no_face_counter = 0
         self.no_switch_counter = 0
-
+        self.last_pose_counter = 0
+        self.last_pose = None
+        self.eyecontact_state = EyeContact.TRIANGLE
         self.tf_listener = tf.TransformListener(False, rospy.Duration.from_sec(1))
 
         # tracks last face by fsdk_id, if changes informs eye tracking to pause
@@ -144,7 +146,7 @@ class Attention:
         # Topic to publish target changes
         self.current_target_pub = rospy.Publisher('/behavior/current_target', Int64, queue_size=5, latch=True)
 
-        self.old_synthesizer_rate = 30
+        self.synthesizer_rate = 30
 
         self.hand_events_pub = rospy.Publisher('/hand_events', String, queue_size=1)
 
@@ -185,23 +187,17 @@ class Attention:
         with self.lock:
             self.config = config
             # and set the states for each state machine
-            self.SetEyeContact(config.eyecontact_state)
+            #self.SetEyeContact(config.eyecontact_state)
             self.SetLookAt(config.lookat_state)
             # self.SetMirroring(config.mirroring_state)
             self.SetGaze(config.gaze_state)
             # Counters
-            if self.synthesizer_rate != self.old_synthesizer_rate or not self.configs_init:
-                if self.timer is not None:
-                    self.timer.shutdown()
-                self.old_synthesizer_rate = self.synthesizer_rate
+            if not self.configs_init:
                 self.timer = rospy.Timer(rospy.Duration.from_sec(1.0 / self.synthesizer_rate), self.HandleTimer)
                 # self.InitCounter("saliency","saliency_time")
                 self.InitCounter("faces", "faces_time")
-                #self.InitCounter("eyes", "eyes_time")
                 self.InitCounter("region", "region_time")
-                # self.InitCounter("all_faces_start", "all_faces_start_time")
-                # self.InitCounter("all_faces_duration", "all_faces_duration")
-                self.InitCounter("rest", "rest_time")
+                # self.InitCounter("rest", "rest_time")
 
             self.configs_init = True
         return config
@@ -229,9 +225,10 @@ class Attention:
         try:
             pos = self.getBlenderPos(pos, ts, frame_id)
             msg = Target()
-            msg.x = pos.x
-            msg.y = pos.y
-            msg.z = pos.z
+            msg.x = max(0.3, pos.x)
+            msg.y = pos.y if not math.isnan(pos.y) else 0
+            msg.z = pos.z if not math.isnan(pos.z) else 0
+            msg.z = max(-0.3, min(0.3, msg.z))
             msg.speed = speed
             self.gaze_focus_pub.publish(msg)
         except Exception as e:
@@ -241,9 +238,10 @@ class Attention:
         try:
             pos = self.getBlenderPos(pos, ts, frame_id)
             msg = Target()
-            msg.x = pos.x
-            msg.y = pos.y
-            msg.z = pos.z
+            msg.x = max(0.3, pos.x)
+            msg.y = pos.y if not math.isnan(pos.y) else 0
+            msg.z = pos.z if not math.isnan(pos.z) else 0
+            msg.z = max(-0.3, min(0.3, msg.z))
             msg.speed = speed
             self.head_focus_pub.publish(msg)
         except Exception as e:
@@ -294,10 +292,20 @@ class Attention:
         # switch to the next (or first) face
         if self.state is None or len(self.state.poses) == 0:
             # there are no faces, so select none
+            self.last_pose_counter = 0
             return False
-
-        i, p = min(enumerate(self.state.poses),
+        # Select nearest pose to the robot, otherwise select nearest pose to previous
+        if self.last_pose is None or self.last_pose_counter <= 0:
+            i, p = min(enumerate(self.state.poses),
                                          key=lambda f: (f[1].position.x**2+f[1].position.y**2))
+            self.last_pose_counter = self.synthesizer_rate * self.min_time_between_targets
+        else:
+            i, p = min(enumerate(self.state.poses),
+                                         key=lambda f: ((self.last_pose.position.x - f[1].position.x)**2+
+                                                        (self.last_pose.position.y - f[1].position.y)**2+
+                                                        (self.last_pose.position.z - f[1].position.z)**2))
+            self.last_pose_counter -= 1
+        self.last_pose = p
         return p
 
 
@@ -319,7 +327,7 @@ class Attention:
 
 
     def SelectNextRegion(self):
-        # Check if performance has set regions
+        # Check if setperformance has set regions
         regions = rospy.get_param("/{}/performance_regions".format(self.robot_name), {})
         if len(regions) == 0:
             regions = rospy.get_param("/{}/regions".format(self.robot_name), {})
@@ -409,9 +417,9 @@ class Attention:
             self.UpdateGaze(cur_eye_pos, ts)
 
         # mirroring
-        msg = pau()
-        msg.m_coeffs = []
-        msg.m_shapekeys = []
+        # msg = pau()
+        # msg.m_coeffs = []
+        # msg.m_shapekeys = []
 
         # if self.mirroring == Mirroring.EYEBROWS or self.mirroring == Mirroring.EYES or self.mirroring == Mirroring.MOUTH_EYEBROWS or self.mirroring == Mirroring.ALL:
         #    # mirror eyebrows
@@ -455,9 +463,7 @@ class Attention:
 
     def HandleTimer(self, data):
         looking_at_face = False
-
         with self.lock:
-
             if not self.configs_init:
                 return False
             if not self.enable_flag:
@@ -479,7 +485,7 @@ class Attention:
                 # TODO: head_focus_pub
                 ()
 
-            if self.lookat == LookAt.HOLD:
+            if self.lookat == LookAt.HOLD or self.lookat == LookAt.IDLE:
                 # Do nothing
                 pass
 
@@ -508,9 +514,15 @@ class Attention:
                     self.UpdateGaze(point, ts, frame_id='blender')
             elif self.lookat == LookAt.POSES:
                 pose = self.SelectNextPose()
-                print(pose)
                 if pose:
                     self.UpdateGaze(pose.position, ts)
+                    self.no_switch_counter = self.synthesizer_rate * self.min_time_between_targets
+                else:
+                    self.no_switch_counter -= 1
+                    if self.no_switch_counter < 0:
+                        point = self.SelectNextRegion()
+                        self.UpdateGaze(point, ts, frame_id='blender')
+                        self.no_switch_counter = self.synthesizer_rate * self.min_time_between_targets
 
 
             else:
@@ -538,9 +550,8 @@ class Attention:
                                 self.InitCounter('no_face', 'region_time')
                             except Exception as e:
                                 # Random point
-                                point =Point(x=1, y=random.uniform(-self.rest_range_x, self.rest_range_y)
-                                           , z=random.uniform(-self.rest_range_y, self.rest_range_y))
-                                self.InitCounter('no_face', 'rest_time')
+                                point =Point(x=1, y=random.uniform(-0.2, 0.2), z=random.uniform(0.05, 0.05))
+                                self.InitCounter('no_face', 'region_time')
                             # regions and or rest points are defined in blender coordinates
                             self.UpdateGaze(point, ts, frame_id='blender')
                             self.ChangeTarget()
@@ -563,18 +574,18 @@ class Attention:
                     except:
                         idle = True
 
-            if self.lookat == LookAt.IDLE or idle:
-                self.rest_counter -= 1
-                if self.rest_counter == 0:
-                    self.InitCounter("rest", "rest_time")
-                    if self.eyecontact > 0:
-                        looking_at_face = True
-                    idle_point = Point(x=1, y=random.uniform(-self.rest_range_x, self.rest_range_y)
-                                       , z=random.uniform(-self.rest_range_y, self.rest_range_y))
-                    # Attention points are calculated in blender frame
-                    self.UpdateGaze(idle_point, ts, frame_id='blender')
-                    # Target have been changed
-                    self.ChangeTarget()
+            # if self.lookat == LookAt.IDLE or idle:
+            #     self.rest_counter -= 1
+            #     if self.rest_counter == 0:
+            #         self.InitCounter("rest", "rest_time")
+            #         if self.eyecontact > 0:
+            #             looking_at_face = True
+            #         idle_point = Point(x=1, y=random.uniform(-self.rest_range_x, self.rest_range_y)
+            #                            , z=random.uniform(-self.rest_range_y, self.rest_range_y))
+            #         # Attention points are calculated in blender frame
+            #         self.UpdateGaze(idle_point, ts, frame_id='blender')
+            #         # Target have been changed
+            #         self.ChangeTarget()
 
             # have gaze or head follow head or gaze after a while
             if self.gaze_delay_counter > 0 and self.gaze_pos != None:
@@ -614,7 +625,6 @@ class Attention:
 
     def SetEyeContact(self, neweyecontact):
 
-        logger.warn("SetEyeContact {}".format(neweyecontact))
         if neweyecontact == self.eyecontact:
             return
 
@@ -626,7 +636,6 @@ class Attention:
 
     def SetLookAt(self, newlookat):
 
-        logger.warn("SetLookAt {}".format(newlookat))
         if newlookat == self.lookat:
             return
 
@@ -645,8 +654,8 @@ class Attention:
         elif self.lookat == LookAt.REGION:
             self.InitCounter("region", "region_time")
 
-        elif self.lookat == LookAt.IDLE:
-            self.InitCounter("rest", "rest_time")
+        # elif self.lookat == LookAt.IDLE:
+        #     self.InitCounter("rest", "rest_time")
 
     def StartPauMode(self):
 
@@ -663,22 +672,20 @@ class Attention:
 
 
     def SetMirroring(self, newmirroring):
-
-        logger.warn("SetMirroring {}".format(newmirroring))
-        if newmirroring == self.mirroring:
-            return
-
-        self.mirroring = newmirroring
-
-        if self.mirroring == Mirroring.IDLE:
-            self.StopPauMode()
-        else:
-            self.StartPauMode()
+        pass
+        # logger.warn("SetMirroring {}".format(newmirroring))
+        # if newmirroring == self.mirroring: return
+        #
+        # self.mirroring = newmirroring
+        #
+        # if self.mirroring == Mirroring.IDLE:
+        #     self.StopPauMode()
+        # else:
+        #     self.StartPauMode()
 
 
     def SetGaze(self, newgaze):
 
-        logger.warn("SetGaze {}".format(newgaze))
         if newgaze == self.gaze:
             return
 
