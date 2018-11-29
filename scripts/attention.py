@@ -113,7 +113,8 @@ class Attention:
         self.eyecontact = 0
         self.lookat = 0
         self.mirroring = 0
-        self.gaze = 0
+        # By default look with head and eyes
+        self.gaze = 2
         # setup face, hand and saliency structures
         self.state = State()
         self.current_face_index = -1  # index to current face
@@ -190,7 +191,7 @@ class Attention:
             #self.SetEyeContact(config.eyecontact_state)
             self.SetLookAt(config.lookat_state)
             # self.SetMirroring(config.mirroring_state)
-            self.SetGaze(config.gaze_state)
+            # self.SetGaze(config.gaze_state)
             # Counters
             if not self.configs_init:
                 self.timer = rospy.Timer(rospy.Duration.from_sec(1.0 / self.synthesizer_rate), self.HandleTimer)
@@ -332,8 +333,6 @@ class Attention:
         if len(regions) == 0:
             regions = rospy.get_param("/{}/regions".format(self.robot_name), {})
         point = AttentionRegion.get_point_from_regions(regions, REGIONS[self.attention_region])
-        if point['x'] == 1 and point['y'] == 0 and point['z'] == 0:
-            raise Exception("Only idle point found")
         return Point(x=point['x'], y=point['y'], z=point['z'])
 
 
@@ -489,20 +488,20 @@ class Attention:
                 # Do nothing
                 pass
 
-            if self.lookat == LookAt.SALIENCY:
-                self.saliency_counter -= 1
-                if self.saliency_counter == 0:
-                    self.SelectNextSalientPoint()
-                    # Reset head position if nothing happens
-                    if self.current_saliency_index == -1:
-                        self.UpdateGaze(idle_point, ts, frame_id='blender')
-                    else:
-                        # Init counter only if any salient point found
-                        self.InitCounter("saliency","saliency_time")
-
-                if self.current_saliency_index != -1:
-                    cursaliency = self.state.salientpoints[self.current_saliency_index]
-                    self.UpdateGaze(cursaliency.position, ts)
+            # if self.lookat == LookAt.SALIENCY:
+            #     self.saliency_counter -= 1
+            #     if self.saliency_counter == 0:
+            #         self.SelectNextSalientPoint()
+            #         # Reset head position if nothing happens
+            #         if self.current_saliency_index == -1:
+            #             self.UpdateGaze(idle_point, ts, frame_id='blender')
+            #         else:
+            #             # Init counter only if any salient point found
+            #             self.InitCounter("saliency","saliency_time")
+            #
+            #     if self.current_saliency_index != -1:
+            #         cursaliency = self.state.salientpoints[self.current_saliency_index]
+            #         self.UpdateGaze(cursaliency.position, ts)
 
             elif self.lookat == LookAt.REGION:
                 self.region_counter -= 1
@@ -512,21 +511,19 @@ class Attention:
                     point = self.SelectNextRegion()
                     # Attention points are calculated in blender frame
                     self.UpdateGaze(point, ts, frame_id='blender')
-            elif self.lookat == LookAt.POSES:
-                pose = self.SelectNextPose()
-                if pose:
-                    self.UpdateGaze(pose.position, ts)
-                    self.no_switch_counter = self.synthesizer_rate * self.min_time_between_targets
-                else:
-                    self.no_switch_counter -= 1
-                    if self.no_switch_counter < 0:
-                        point = self.SelectNextRegion()
-                        self.UpdateGaze(point, ts, frame_id='blender')
-                        self.no_switch_counter = self.synthesizer_rate * self.min_time_between_targets
-
-
+            # elif self.lookat == LookAt.POSES:
+            #     pose = self.SelectNextPose()
+            #     if pose:
+            #         self.UpdateGaze(pose.position, ts)
+            #         self.no_switch_counter = self.synthesizer_rate * self.min_time_between_targets
+            #     else:
+            #         self.no_switch_counter -= 1
+            #         if self.no_switch_counter < 0:
+            #             point = self.SelectNextRegion()
+            #             self.UpdateGaze(point, ts, frame_id='blender')
+            #             self.no_switch_counter = self.synthesizer_rate * self.min_time_between_targets
             else:
-                if self.lookat == LookAt.ALL_FACES or self.lookat == LookAt.NEAREST_FACE:
+                if self.lookat == LookAt.ALL_FACES or self.lookat == LookAt.NEAREST_FACE or self.lookat == LookAt.POSES:
                     self.faces_counter -= 1
                     if self.faces_counter == 0:
                         self.SelectNextFace()
@@ -541,21 +538,20 @@ class Attention:
                         # Reset after face is found
                         self.no_face_counter = 0
                     except:
-                        # look around region and or idle point for the
-                        # If no face find some other point from region and or rest point to find some people
+                        # Look at poses if no faces are visible, and then look at region otherwise
+                        pose = self.SelectNextPose()
                         self.no_face_counter -= 1
-                        if self.no_face_counter <= 0:
-                            try:
-                                point = self.SelectNextRegion()
-                                self.InitCounter('no_face', 'region_time')
-                            except Exception as e:
-                                # Random point
-                                point =Point(x=1, y=random.uniform(-0.2, 0.2), z=random.uniform(0.05, 0.05))
-                                self.InitCounter('no_face', 'region_time')
-                            # regions and or rest points are defined in blender coordinates
-                            self.UpdateGaze(point, ts, frame_id='blender')
-                            self.ChangeTarget()
+                        if pose:
+                            self.UpdateGaze(pose.position, ts)
                             self.no_switch_counter = self.synthesizer_rate * self.min_time_between_targets
+                        else:
+                            self.no_switch_counter -= 1
+                            if self.no_switch_counter <= 0:
+                                if self.no_face_counter <= 0:
+                                    point = self.SelectNextRegion()
+                                    self.InitCounter('no_face', 'region_time')
+                                    self.UpdateGaze(point, ts, frame_id='blender')
+                                    self.no_switch_counter = self.synthesizer_rate * self.min_time_between_targets
 
             if self.lookat == LookAt.REGION or region:
                 self.region_counter -= 1
@@ -567,7 +563,7 @@ class Attention:
                     # SelectNextRegion returns idle point if no region set
                     try:
                         point = self.SelectNextRegion()
-                        # Attention points are calculated in blender frame
+                        # Attention points are calculated in blender frqame
                         self.UpdateGaze(point, ts, frame_id='blender')
                         # Target have been changed
 
