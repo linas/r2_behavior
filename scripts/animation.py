@@ -2,6 +2,7 @@
 
 import time
 import random
+import logging
 import json
 import numpy as np
 
@@ -9,6 +10,7 @@ import rospy
 from hr_msgs.msg import EmotionState, SetGesture
 from r2_behavior.cfg import AnimationConfig
 from dynamic_reconfigure.server import Server
+logger = logging.getLogger('hr.r2_behavior.animation')
 
 
 class Utils:
@@ -51,6 +53,10 @@ class Expressions:
             expression.duration = rospy.Duration(
                 max(1, random.uniform(float(e['duration_min']), float(e['duration_max'])) *
                     self.config['expression_duration']))
+            logger.info('animation-expression', extra={'data': {
+                'name': expression.name,
+                'magnitude': expression.magnitude,
+                'duration': expression.duration.secs}})
             return expression
         return None
 
@@ -75,8 +81,13 @@ class Gestures:
                                            self.config['gesture_magnitude']))
             gesture.speed = min(3, random.uniform(float(g['speed_min']), float(g['speed_max'])) *
                                 self.config['gesture_speed'])
+            logger.info('animation-gesture', extra={'data': {
+                'name': gesture.name,
+                'magnitude': gesture.magnitude,
+                'speed': gesture.speed}})
             return gesture
         return None
+
 
 class Animations:
     def __init__(self):
@@ -89,7 +100,7 @@ class Animations:
         self.expresion_pub = rospy.Publisher('/blender_api/set_emotion_state', EmotionState,queue_size=10)
         self.gesture_pub = rospy.Publisher('/blender_api/set_gesture', SetGesture, queue_size=10)
 
-    def config_callback(self, config, level ):
+    def config_callback(self, config, level):
         self.config = config
         if self.init:
             self.gestures = Gestures(config)
@@ -113,6 +124,7 @@ class Animations:
             self.expresion_pub.publish(expression)
         if gesture:
             self.gesture_pub.publish(gesture)
+
 
 if __name__ == "__main__":
     rospy.init_node("animations")

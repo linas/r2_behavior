@@ -452,7 +452,7 @@ class Robot(HierarchicalMachine):
             try:
                 self.clients['attention'].update_configuration({'enable_flag': not val})
             except Exception as e:
-                logger.errot(e)
+                logger.error(e)
 
     @property
     def disable_animations(self):
