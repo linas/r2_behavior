@@ -1,3 +1,4 @@
+# Copyright (c) 2013-2018 Hanson Robotics, Ltd, all rights reserved 
 sleeping_expressions:
   - {duration_max: 8, duration_min: 2, magnitude_max: 1, magnitude_min: 0.6, name: happy,
     probability: 0.2}
